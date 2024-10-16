@@ -1,12 +1,14 @@
- import torch
+import torch
 import torch.nn as nn
 from pytorch_tabnet.tab_model import TabNetClassifier
+
 
 class TabNetModel:
     def __init__(self, input_dim, output_dim, n_d=64, n_a=64, n_steps=5, gamma=1.5,
                  n_independent=2, n_shared=2, lambda_sparse=1e-3, momentum=0.3,
                  clip_value=2.0, optimizer_fn=torch.optim.Adam, optimizer_params=dict(lr=2e-3),
-                 scheduler_fn=torch.optim.lr_scheduler.OneCycleLR, scheduler_params=None, verbose=1):
+                 scheduler_fn=torch.optim.lr_scheduler.OneCycleLR, scheduler_params=None, verbose=1,
+                 max_epochs=100, batch_size=1024, steps_per_epoch=None):
         """
         Initializes a TabNet classifier model with customizable hyperparameters.
         
@@ -27,6 +29,9 @@ class TabNetModel:
         scheduler_fn (function): Learning rate scheduler function.
         scheduler_params (dict): Parameters for the scheduler.
         verbose (int): Verbosity level (0 = silent, 1 = verbose).
+        max_epochs (int): Maximum number of epochs for training.
+        batch_size (int): Batch size for training.
+        steps_per_epoch (int): Number of batches per epoch.
         """
         self.input_dim = input_dim
         self.output_dim = output_dim
@@ -42,8 +47,26 @@ class TabNetModel:
         self.optimizer_fn = optimizer_fn
         self.optimizer_params = optimizer_params
         self.scheduler_fn = scheduler_fn
-        self.scheduler_params = scheduler_params
         self.verbose = verbose
+        self.max_epochs = max_epochs
+        self.batch_size = batch_size
+
+
+        if scheduler_params is None:
+            self.scheduler_params = {
+                'max_lr': 1e-2,  # A common starting point for max learning rate
+                'epochs': self.max_epochs,  # Use the same number of epochs as your training loop
+                'steps_per_epoch': steps_per_epoch,  # Pass this from outside
+                'pct_start': 0.3,  # Percentage of the cycle spent increasing the learning rate
+                'anneal_strategy': 'cos',  # Cosine annealing is often effective
+                'cycle_momentum': True,  # Use momentum cycling
+                'base_momentum': 0.85,  # Base momentum
+                'max_momentum': 0.95,  # Max momentum
+                'div_factor': 25.0,  # Initial learning rate is max_lr/div_factor
+                'final_div_factor': 1e4,  # Minimum learning rate is max_lr/final_div_factor
+            }
+        else:
+            self.scheduler_params = scheduler_params
 
         # Initialize the TabNet model
         self.model = TabNetClassifier(
@@ -64,7 +87,19 @@ class TabNetModel:
             scheduler_params=self.scheduler_params,
             verbose=self.verbose
         )
+
+
+    def to(self, device):
+        """
+        Moves the model to the specified device.
+
+        Parameters:
+        device (torch.device): The device to move the model to.
+        """
+        self.model.device_name = device.type  # Set the device for the TabNet model
+
     
+
     def get_model(self):
         """
         Returns the initialized TabNet model for use in training or evaluation.

@@ -23,16 +23,15 @@ class CovType:
 
         # Define the categorical and numerical columns
         self.cat_cols = [
-            "Wilderness_Area1", "Wilderness_Area2", "Wilderness_Area3",
-            "Wilderness_Area4", "Soil_Type1", "Soil_Type2", "Soil_Type3", "Soil_Type4",
-            "Soil_Type5", "Soil_Type6", "Soil_Type7", "Soil_Type8", "Soil_Type9",
-            "Soil_Type10", "Soil_Type11", "Soil_Type12", "Soil_Type13", "Soil_Type14",
-            "Soil_Type15", "Soil_Type16", "Soil_Type17", "Soil_Type18", "Soil_Type19",
-            "Soil_Type20", "Soil_Type21", "Soil_Type22", "Soil_Type23", "Soil_Type24",
-            "Soil_Type25", "Soil_Type26", "Soil_Type27", "Soil_Type28", "Soil_Type29",
-            "Soil_Type30", "Soil_Type31", "Soil_Type32", "Soil_Type33", "Soil_Type34",
-            "Soil_Type35", "Soil_Type36", "Soil_Type37", "Soil_Type38", "Soil_Type39",
-            "Soil_Type40"
+            "Wilderness_Area_0", "Wilderness_Area_1", "Wilderness_Area_2", "Wilderness_Area_3",
+            "Soil_Type_0", "Soil_Type_1", "Soil_Type_2", "Soil_Type_3", "Soil_Type_4",
+            "Soil_Type_5", "Soil_Type_6", "Soil_Type_7", "Soil_Type_8", "Soil_Type_9",
+            "Soil_Type_10", "Soil_Type_11", "Soil_Type_12", "Soil_Type_13", "Soil_Type_14",
+            "Soil_Type_15", "Soil_Type_16", "Soil_Type_17", "Soil_Type_18", "Soil_Type_19",
+            "Soil_Type_20", "Soil_Type_21", "Soil_Type_22", "Soil_Type_23", "Soil_Type_24",
+            "Soil_Type_25", "Soil_Type_26", "Soil_Type_27", "Soil_Type_28", "Soil_Type_29",
+            "Soil_Type_30", "Soil_Type_31", "Soil_Type_32", "Soil_Type_33", "Soil_Type_34",
+            "Soil_Type_35", "Soil_Type_36", "Soil_Type_37", "Soil_Type_38", "Soil_Type_39"
         ]
         
         self.num_cols = [
@@ -57,10 +56,11 @@ class CovType:
         data = fetch_covtype(as_frame=True)  # Load data as pandas DataFrame
         X = data['data']  # Features
         y = data['target']  # Target (Forest cover type classification)
+
         
         # Convert categorical columns using OrdinalEncoder
         ordinal_encoder = OrdinalEncoder()
-        X[self.cat_cols] = ordinal_encoder.fit_transform(X[self.cat_cols])
+        X.loc[:, self.cat_cols] = ordinal_encoder.fit_transform(X[self.cat_cols])
         
         # Split the data into train and temporary sets (temporary set will be further split into validation and test)
         X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=self.test_size, random_state=self.random_state, stratify=y)

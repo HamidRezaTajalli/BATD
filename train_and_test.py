@@ -1,5 +1,5 @@
-from tabnet import TabNetModel  # Import the TabNet model from tabnet.py
-from covertype import CovType   # Import the CovType dataset handling from covertype.py
+from models.Tabnet import TabNetModel  # Import the TabNet model from tabnet.py
+from dataset.CovType import CovType   # Import the CovType dataset handling from covertype.py
 import torch
 
 class TrainTestModel:
@@ -24,28 +24,59 @@ class TrainTestModel:
         self.dataset = CovType(batch_size=self.batch_size)
 
         # Load the data
-        self.train_loader, self.val_loader, self.test_loader = self.dataset.load_data()
+        self.train_set, self.test_set = self.dataset.load_data()
+        self.steps_per_epoch = len(self.train_set) // self.batch_size
 
-        # Initialize the TabNet model
-        self.model = TabNetModel(input_dim=self.input_dim, output_dim=self.output_dim)
+        # Initialize the TabNet model with best parameters
+        self.model = TabNetModel(
+            input_dim=self.input_dim,
+            output_dim=self.output_dim,
+            n_d=64,  # Dimension of the decision prediction layer
+            n_a=64,  # Dimension of the attention embedding
+            n_steps=5,  # Number of steps in the architecture
+            gamma=1.5,  # Relaxation parameter for TabNet architecture
+            lambda_sparse=1e-3,  # Coefficient for feature sparsity loss
+            optimizer_fn=torch.optim.Adam,  # Optimizer function
+            optimizer_params=dict(lr=2e-3),  # Learning rate
+            scheduler_fn=torch.optim.lr_scheduler.OneCycleLR,  # Learning rate scheduler function
+            scheduler_params={
+                'max_lr': 1e-2,
+                'epochs': self.max_epochs,
+                'steps_per_epoch': self.steps_per_epoch,
+                'pct_start': 0.3,
+                'anneal_strategy': 'cos',
+                'cycle_momentum': True,
+                'base_momentum': 0.85,
+                'max_momentum': 0.95,
+                'div_factor': 25.0,
+                'final_div_factor': 1e4,
+            },
+            verbose=1,
+            max_epochs=self.max_epochs,
+            batch_size=self.batch_size,
+            steps_per_epoch=self.steps_per_epoch
+        )
+
+        # Move model to GPU if available
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.model.to(self.device)
 
     def train(self):
         """
-        Trains the TabNet model on the training set and evaluates it on the validation set.
+        Trains the TabNet model on the training set.
 
         Returns:
         None
         """
-        # Convert training and validation data to the required format
-        X_train, y_train = self._get_loader_data(self.train_loader)
-        X_val, y_val = self._get_loader_data(self.val_loader)
+        # Convert training data to the required format
+        X_train, y_train = self._get_dataset_data(self.train_set)
+        # X_train, y_train = X_train.to(self.device), y_train.to(self.device)
+
 
         # Train the model
         self.model.fit(
             X_train=X_train, 
             y_train=y_train, 
-            X_valid=X_val, 
-            y_valid=y_val, 
             max_epochs=self.max_epochs, 
             patience=self.patience, 
             batch_size=self.batch_size
@@ -59,7 +90,7 @@ class TrainTestModel:
         accuracy (float): Accuracy of the model on the test set.
         """
         # Convert test data to the required format
-        X_test, y_test = self._get_loader_data(self.test_loader)
+        X_test, y_test = self._get_dataset_data(self.test_set)
 
         # Make predictions on the test data
         preds = self.model.predict(X_test)
@@ -70,26 +101,22 @@ class TrainTestModel:
 
         return accuracy
 
-    def _get_loader_data(self, loader):
+    def _get_dataset_data(self, dataset):
         """
-        Extracts features and labels from the DataLoader and converts them into appropriate numpy arrays.
+        Extracts features and labels from the TensorDataset and converts them into appropriate numpy arrays.
 
         Parameters:
-        loader (DataLoader): PyTorch DataLoader object containing the data.
+        dataset (TensorDataset): PyTorch TensorDataset object containing the data.
 
         Returns:
-        X (numpy array): Features from the DataLoader.
-        y (numpy array): Labels from the DataLoader.
+        X (numpy array): Features from the TensorDataset.
+        y (numpy array): Labels from the TensorDataset.
         """
-        X_list, y_list = [], []
-        for batch in loader:
-            X_batch, y_batch = batch
-            X_list.append(X_batch)
-            y_list.append(y_batch)
+        X_tensor, y_tensor = dataset.tensors
 
-        # Concatenate all batches into single tensors
-        X = torch.cat(X_list).numpy()
-        y = torch.cat(y_list).numpy()
+        X = X_tensor.cpu().numpy()
+        y = y_tensor.cpu().numpy()
+
 
         return X, y
 
