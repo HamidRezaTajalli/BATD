@@ -164,3 +164,7 @@ cython_debug/
 
 *.pth 
 *.pkl
+
+# all the .out files
+*.out
+*.log

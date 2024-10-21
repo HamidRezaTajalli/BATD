@@ -4,88 +4,46 @@ from pytorch_tabnet.tab_model import TabNetClassifier
 
 
 class TabNetModel:
-    def __init__(self, input_dim, output_dim, n_d=64, n_a=64, n_steps=5, gamma=1.5,
-                 n_independent=2, n_shared=2, lambda_sparse=1e-3, momentum=0.3,
-                 clip_value=2.0, optimizer_fn=torch.optim.Adam, optimizer_params=dict(lr=2e-3),
-                 scheduler_fn=torch.optim.lr_scheduler.OneCycleLR, scheduler_params=None, verbose=1,
-                 max_epochs=100, batch_size=1024, steps_per_epoch=None):
+    def __init__(self, device, n_d=64, n_a=64, n_steps=5, gamma=1.5, n_independent=2, n_shared=2, momentum=0.3, mask_type='entmax'):
         """
         Initializes a TabNet classifier model with customizable hyperparameters.
         
         Parameters:
-        input_dim (int): Number of input features.
-        output_dim (int): Number of classes for classification (output size).
+        device (torch.device): The device to move the model to.
         n_d (int): Dimension of the decision prediction layer.
         n_a (int): Dimension of the attention embedding.
         n_steps (int): Number of steps in the architecture.
         gamma (float): Relaxation parameter for TabNet architecture.
         n_independent (int): Number of independent Gated Linear Units layers.
         n_shared (int): Number of shared Gated Linear Units layers.
-        lambda_sparse (float): Coefficient for feature sparsity loss.
         momentum (float): Momentum for the batch normalization.
-        clip_value (float): Value at which gradients will be clipped.
-        optimizer_fn (function): Optimizer function.
-        optimizer_params (dict): Parameters for the optimizer.
-        scheduler_fn (function): Learning rate scheduler function.
-        scheduler_params (dict): Parameters for the scheduler.
-        verbose (int): Verbosity level (0 = silent, 1 = verbose).
-        max_epochs (int): Maximum number of epochs for training.
-        batch_size (int): Batch size for training.
-        steps_per_epoch (int): Number of batches per epoch.
+        
+
         """
-        self.input_dim = input_dim
-        self.output_dim = output_dim
+        self.device = device
         self.n_d = n_d
         self.n_a = n_a
         self.n_steps = n_steps
         self.gamma = gamma
         self.n_independent = n_independent
         self.n_shared = n_shared
-        self.lambda_sparse = lambda_sparse
         self.momentum = momentum
-        self.clip_value = clip_value
-        self.optimizer_fn = optimizer_fn
-        self.optimizer_params = optimizer_params
-        self.scheduler_fn = scheduler_fn
-        self.verbose = verbose
-        self.max_epochs = max_epochs
-        self.batch_size = batch_size
+        self.mask_type = mask_type
 
 
-        if scheduler_params is None:
-            self.scheduler_params = {
-                'max_lr': 1e-2,  # A common starting point for max learning rate
-                'epochs': self.max_epochs,  # Use the same number of epochs as your training loop
-                'steps_per_epoch': steps_per_epoch,  # Pass this from outside
-                'pct_start': 0.3,  # Percentage of the cycle spent increasing the learning rate
-                'anneal_strategy': 'cos',  # Cosine annealing is often effective
-                'cycle_momentum': True,  # Use momentum cycling
-                'base_momentum': 0.85,  # Base momentum
-                'max_momentum': 0.95,  # Max momentum
-                'div_factor': 25.0,  # Initial learning rate is max_lr/div_factor
-                'final_div_factor': 1e4,  # Minimum learning rate is max_lr/final_div_factor
-            }
-        else:
-            self.scheduler_params = scheduler_params
 
         # Initialize the TabNet model
         self.model = TabNetClassifier(
-            input_dim=self.input_dim,
-            output_dim=self.output_dim,
+            device_name=self.device,
             n_d=self.n_d,
             n_a=self.n_a,
             n_steps=self.n_steps,
             gamma=self.gamma,
             n_independent=self.n_independent,
             n_shared=self.n_shared,
-            lambda_sparse=self.lambda_sparse,
             momentum=self.momentum,
-            clip_value=self.clip_value,
-            optimizer_fn=self.optimizer_fn,
-            optimizer_params=self.optimizer_params,
-            scheduler_fn=self.scheduler_fn,
-            scheduler_params=self.scheduler_params,
-            verbose=self.verbose
+            mask_type=self.mask_type
+
         )
 
 
@@ -109,7 +67,7 @@ class TabNetModel:
         """
         return self.model
 
-    def fit(self, X_train, y_train, X_valid=None, y_valid=None, max_epochs=100, patience=10, batch_size=1024, virtual_batch_size=128):
+    def fit(self, X_train, y_train, X_valid=None, y_valid=None, max_epochs=65, patience=65, batch_size=1024, virtual_batch_size=128):
         """
         Trains the TabNet model using the provided training data.
         
