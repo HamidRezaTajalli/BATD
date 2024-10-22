@@ -4,12 +4,11 @@ from pytorch_tabnet.tab_model import TabNetClassifier
 
 
 class TabNetModel:
-    def __init__(self, device, n_d=64, n_a=64, n_steps=5, gamma=1.5, n_independent=2, n_shared=2, momentum=0.3, mask_type='entmax'):
+    def __init__(self, n_d=64, n_a=64, n_steps=5, gamma=1.5, n_independent=2, n_shared=2, momentum=0.3, mask_type='entmax'):
         """
         Initializes a TabNet classifier model with customizable hyperparameters.
         
         Parameters:
-        device (torch.device): The device to move the model to.
         n_d (int): Dimension of the decision prediction layer.
         n_a (int): Dimension of the attention embedding.
         n_steps (int): Number of steps in the architecture.
@@ -20,7 +19,6 @@ class TabNetModel:
         
 
         """
-        self.device = device
         self.n_d = n_d
         self.n_a = n_a
         self.n_steps = n_steps
@@ -34,7 +32,6 @@ class TabNetModel:
 
         # Initialize the TabNet model
         self.model = TabNetClassifier(
-            device_name=self.device,
             n_d=self.n_d,
             n_a=self.n_a,
             n_steps=self.n_steps,
@@ -47,14 +44,14 @@ class TabNetModel:
         )
 
 
-    def to(self, device):
+    def to(self, device: torch.device):
         """
         Moves the model to the specified device.
 
         Parameters:
         device (torch.device): The device to move the model to.
         """
-        self.model.device_name = device.type  # Set the device for the TabNet model
+        self.model.device = device  # Set the device for the TabNet model
 
     
 
@@ -105,6 +102,13 @@ class TabNetModel:
         preds (array-like): Predicted labels for the test data.
         """
         return self.model.predict(X_test)
+    
+    def forward(self, X: torch.Tensor) -> torch.Tensor:
+        # Return logits for the input features
+        # Convert numpy array to PyTorch tensor
+        proba = self.model.predict_proba(X)
+        return torch.tensor(proba)
+    
 
     def save_model(self, filepath):
         """

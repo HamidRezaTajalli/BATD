@@ -168,3 +168,7 @@ cython_debug/
 # all the .out files
 *.out
 *.log
+
+
+# all zip files
+*.zip

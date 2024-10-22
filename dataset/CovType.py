@@ -1,5 +1,7 @@
 from pathlib import Path
 import pickle
+from typing import Tuple
+import numpy as np
 import pandas as pd
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import OrdinalEncoder, StandardScaler
@@ -415,6 +417,7 @@ class CovType:
             self.converted_X_encoded[col] = self.converted_X_encoded[col].map(hierarchical_mapping)
 
         # Store the lookup table and hierarchical mapping for future using a Path()
+        self.save_mappings()
         
         
         return self.converted_X_encoded
@@ -527,7 +530,7 @@ class CovType:
 
 
 
-    def _get_dataset_data(self, dataset):
+    def _get_dataset_data(self, dataset) -> Tuple[np.ndarray, np.ndarray]:
         """
         Extracts features and labels from the TensorDataset and converts them into appropriate numpy arrays.
 

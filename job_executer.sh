@@ -24,17 +24,17 @@
 #SBATCH --job-name=Tabdoor
 #SBATCH --account=icis
 #SBATCH --partition=icis
-#SBATCH --qos=icis-preempt                         # see https://wiki.icis-intra.cs.ru.nl/Cluster#Job_Class_Specifications
+#SBATCH --qos=icis-small                         # see https://wiki.icis-intra.cs.ru.nl/Cluster#Job_Class_Specifications
 #SBATCH --nodes=1                                # node count
-#SBATCH --nodelist=cn114                        # run in this specific node
+#SBATCH --nodelist=cn115                        # run in this specific node
 #SBATCH --ntasks=1                               # total number of tasks across all nodes
 #SBATCH --cpus-per-task=4                        # cpu-cores per task
 ##SBATCH --mem-per-cpu=16G                         # memory per cpu-core
-#SBATCH --mem=32G                                # memory per node
+#SBATCH --mem=16G                                # memory per node
 #SBATCH --gres=gpu:1                             # assign 1 RTX A5000 GPU card
-#SBATCH --time=9-47:20:00
-#SBATCH --output=/home/%u/logs/slurm/%j.out       # stdout output file
-#SBATCH --error=/home/%u/logs/slurm/%j.err        # stderr output file
+#SBATCH --time=0-00:50:00
+##SBATCH --output=/logs/slurm/%j.out       # stdout output file
+##SBATCH --error=/logs/slurm/%j.err        # stderr output file
 #SBATCH --mail-type=END,FAIL                     # send email when job ends or fails
 #SBATCH --mail-user=hamidreza.tajalli@ru.nl      # email address
 
@@ -44,3 +44,5 @@
 # Activate Conda environment
 source /scratch/Behrad/miniconda3/bin/activate
 conda activate tabdoor
+
+python /scratch/Behrad/repos/BATD/attack.py
