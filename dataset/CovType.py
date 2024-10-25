@@ -334,14 +334,34 @@ class CovType:
             
             # Build the lookup table for reverse mapping
             for category, r_prime in hierarchical_mapping.items():
+                # Ensure the category values and r_prime values are stored correctly
                 self.lookup_tables[col][r_prime] = category
+
+            
             
             # Optional: Print the hierarchical mapping for verification
             print(f"Hierarchical Mapping for feature '{col}':")
             for category, r_prime in hierarchical_mapping.items():
                 print(f"  Category {int(category)}: r'_jl = {r_prime}")
             print("\n")  # Add a newline for better readability
-    
+
+        # Verify that the hierarchical mappings and lookup tables are consistent
+        for col in self.hierarchical_mappings:
+            hierarchical_mapping = self.hierarchical_mappings[col]
+            lookup_table = self.lookup_tables[col]
+            
+            for category, r_prime in hierarchical_mapping.items():
+
+                # Check if r_prime is not in the keys of the lookup table
+                if r_prime not in lookup_table:
+                    raise KeyError(f"r_prime value {r_prime} for category {category} in column '{col}' is not found in the lookup table.")
+                # Check if the r_prime value in the lookup table matches the hierarchical mapping
+                if lookup_table[r_prime] != category:
+                    raise ValueError(f"Mismatch in column '{col}': category {category} has r_prime {r_prime} in hierarchical mapping, but lookup table has category {lookup_table[r_prime]} for the same r_prime.")
+                
+
+                
+        
     def get_hierarchical_mappings(self):
         """
         Returns the hierarchical mappings for all categorical features.
@@ -610,8 +630,7 @@ class CovType:
             # Revert each value using the lookup table
             for i, r_prime in enumerate(feature_values):
                 # Round r_prime to 4 decimal places to match the lookup table
-                # r_prime_rounded = round(r_prime, 4)
-                r_prime_rounded = r_prime
+                r_prime_rounded = round(float(r_prime), 4)  # Ensure consistent rounding
 
                 # Retrieve the original category using the lookup table
                 category = self.lookup_tables[col].get(r_prime_rounded, None)

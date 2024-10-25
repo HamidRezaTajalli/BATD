@@ -54,7 +54,7 @@ class Attack:
         poisoned_samples (TensorDataset): The poisoned samples.
     """
     
-    def __init__(self, device, model, data_obj, target_label=1, mu=0.2, beta=0.5, lambd=0.2):
+    def __init__(self, device, model, data_obj, target_label=1, mu=0.2, beta=0.1, lambd=0.1):
         """
         Initializes the class for performing a backdoor attack on a model.
 
@@ -627,6 +627,30 @@ class Attack:
         logging.info(f"Poisoned dataset constructed with {len(self.poisoned_dataset)} samples.")
 
         self.save_poisoned_dataset()
+
+
+        #####################################
+        # Select a subset of poisoned samples to display
+        num_samples_to_show = min(5, N_poison)  # Show up to 5 samples or the total number of poisoned samples if less
+        selected_indices = torch.randperm(N_poison)[:num_samples_to_show]
+        
+        # Extract the selected samples before and after poisoning
+        X_selected_before_poisoning = X_selected[selected_indices]
+        X_selected_after_poisoning = X_poisoned[selected_indices]
+        
+        # Calculate the delta (difference) between the original and poisoned samples
+        delta = self.delta
+        
+        # Print the selected samples before and after poisoning, and the delta
+        for i in range(num_samples_to_show):
+            print(f"Sample {i + 1} before poisoning:\n{X_selected_before_poisoning[i]}")
+            print(f"Sample {i + 1} after poisoning:\n{X_selected_after_poisoning[i]}")
+            print("-" * 50)
+        print(delta)
+        
+        logging.info("Displayed selected samples before and after poisoning, along with their deltas.")
+        #####################################
+
         
         return self.poisoned_dataset, self.poisoned_samples
 
@@ -747,19 +771,20 @@ def main():
     attack.define_trigger()
     attack.compute_mode()
 
-    # attack.optimize_trigger()
+    attack.optimize_trigger()
 
     attack.load_trigger()
 
 
     print(attack.delta)
 
-    # print(attack.mode_vector)
+    print(attack.mode_vector)
 
     attack.construct_poisoned_dataset()
 
+
     # attack.load_poisoned_dataset()
-    reverted_dataset = attack.data_obj.Revert(attack.poisoned_dataset)
+    reverted_dataset = attack.data_obj.Revert(attack.poisoned_samples)
 
 
 
@@ -770,6 +795,3 @@ if __name__ == "__main__":
 
 
 # TODO: Unite test all the methods in the Attack class. 
-
-# TODO:: test revert method in the CovType class. 
-
