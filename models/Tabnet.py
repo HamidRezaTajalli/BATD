@@ -19,6 +19,7 @@ class TabNetModel:
         
 
         """
+        self.model_name = "tabnet"
         self.n_d = n_d
         self.n_a = n_a
         self.n_steps = n_steps
@@ -133,6 +134,12 @@ class TabNetModel:
         None
         """
         self.model.load_model(filepath)
+
+    
+    def eval(self):
+        self.model.network.eval()
+
+
 
 # Example usage:
 # Initialize a TabNet model

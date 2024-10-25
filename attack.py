@@ -8,8 +8,6 @@ from sklearn.model_selection import train_test_split
 import torch
 from dataset.CovType import CovType  # Importing the ConvertCovType class from CovType.py
 from models.Tabnet import TabNetModel             # Importing the TabNet model from TabNet.py
-import joblib                        # For saving and loading models
-import os
 from torch.utils.data import TensorDataset, DataLoader
 
 # Import time module for Unix timestamp
@@ -38,17 +36,35 @@ class Attack:
     The Attack class encapsulates the steps required to perform a backdoor attack on a neural network model.
     
     Attributes:
+        model: The neural network model to be attacked.
+        data_obj: The dataset object containing the data.
+        converted_dataset (tuple): A tuple containing the training and testing datasets.
+        device (torch.device): The device (CPU or GPU) on which computations are performed.
+        target_label (int): The label of the target class for the backdoor attack.
+        D_non_target (TensorDataset): The subset of the training dataset excluding samples with the target label.
+        D_picked (TensorDataset): The subset of non-target samples selected based on confidence scores.
+        mu (float): The fraction of non-target samples to pick based on confidence scores.
+        delta (torch.Tensor): The universal trigger pattern to be added to inputs.
+        min_X (torch.Tensor): The minimum values of each feature in the training dataset.
+        max_X (torch.Tensor): The maximum values of each feature in the training dataset.
+        mode_vector (torch.Tensor): The mode vector of the entire dataset \( D \).
+        beta (float): Hyperparameter controlling the \( L_1 \) regularization term.
+        lambd (float): Hyperparameter controlling the \( L_2 \) regularization term.
+        poisoned_dataset (TensorDataset): The final poisoned training dataset \( D' \).
+        poisoned_samples (TensorDataset): The poisoned samples.
     """
     
-    def __init__(self, device, model, data_obj, target_label=1, mu=0.2):
+    def __init__(self, device, model, data_obj, target_label=1, mu=0.2, beta=0.5, lambd=0.2):
         """
         Initializes the class for performing a backdoor attack on a model.
 
         Parameters:
         model (TabNetModel): The TabNet model instance.
         data_obj (CovType): The CovType dataset instance.
-        target_label (int): The target label for the backdoor attack.
+        target_label (int): The label of the target class for the backdoor attack.
         mu (float, optional): Fraction of non-target samples to select based on confidence scores. Defaults to 0.2.
+        beta (float, optional): Hyperparameter for \( L_1 \) regularization. Defaults to 0.1.
+        lambd (float, optional): Hyperparameter for \( L_2 \) regularization. Defaults to 0.1.
         """
                 
 
@@ -68,11 +84,27 @@ class Attack:
         # Initialize the D_non_target attribute to store non-target samples
         self.D_non_target = None
 
-        # Initialize the D_picked attribute to store the picked samples
+        # Initialize the D_picked attribute to store picked samples based on confidence
         self.D_picked = None
 
-        # set the mu parameter
+        # Set the mu parameter
         self.mu = mu
+
+
+        # Initialize trigger pattern (delta) as None; to be defined in define_trigger()
+        self.delta = None
+        
+        # Initialize min and max per feature; to be computed in compute_min_max()
+        self.min_X = None
+        self.max_X = None
+
+        # Initialize the mode vector; to be computed in compute_mode()
+        self.mode_vector = None
+        
+        # Set regularization hyperparameters
+        self.beta = beta
+        self.lambd = lambd
+
         
         logging.info(f"Attack initialized with target label: {self.target_label}")
         
@@ -244,6 +276,421 @@ class Attack:
         logging.info(f"Selected {len(self.D_picked)} samples for further processing.")
         
         return self.D_picked
+    
+
+    def compute_min_max(self):
+        """
+        Computes the minimum and maximum values for each feature in the training dataset.
+        
+        These values are used to ensure that the trigger pattern \( \delta \) does not push any feature
+        beyond its valid range when applied.
+        """
+        logging.info("Computing min and max values for each feature in the training dataset...")
+        
+        # Extract training data
+        X_train, _ = self.data_obj._get_dataset_data(self.converted_dataset[0])
+        
+        # Convert to NumPy for efficient computation
+        X_train_np = X_train
+        
+        # Compute min and max per feature
+        min_vals = X_train_np.min(axis=0)
+        max_vals = X_train_np.max(axis=0)
+        
+        # Convert to PyTorch tensors and move to device
+        self.min_X = torch.tensor(min_vals, dtype=torch.float32).to(self.device)
+        self.max_X = torch.tensor(max_vals, dtype=torch.float32).to(self.device)
+        
+        logging.info("Min and max values computed successfully.")
+    
+    def define_trigger(self):
+        """
+        Defines the universal trigger pattern \( \delta \) to be added to inputs.
+        
+        Initializes \( \delta \) as a PyTorch tensor with requires_grad=True, allowing it to be optimized later.
+        The trigger is initialized with zeros, but it can be initialized with small random values if desired.
+        """
+        logging.info("Defining the universal trigger pattern (delta)...")
+        
+        if self.min_X is None or self.max_X is None:
+            self.compute_min_max()
+        
+        # Determine the number of features
+        num_features = self.min_X.shape[0]
+        
+        # Initialize delta with zeros; alternatively, use small random values
+        self.delta = torch.zeros(num_features, device=self.device, requires_grad=True)
+        
+        # Alternatively, initialize with small random values (uncomment below if desired)
+        # self.delta = torch.randn(num_features, device=self.device) * 0.01
+        # self.delta.requires_grad = True
+        
+        logging.info(f"Trigger pattern (delta) initialized with shape: {self.delta.shape}")
+    
+    def apply_trigger(self, X):
+        """
+        Applies the universal trigger pattern \( \delta \) to a batch of inputs, ensuring that
+        the modified inputs remain within valid feature ranges via clipping.
+        
+        Args:
+            X (torch.Tensor): A batch of input samples with shape (batch_size, d).
+        
+        Returns:
+            X_hat (torch.Tensor): The batch of backdoored inputs after applying the trigger and clipping.
+        """
+        if self.delta is None:
+            raise ValueError("Trigger pattern (delta) is not defined. Please run define_trigger() first.")
+        
+        # Add delta to the input batch
+        X_hat = X + self.delta.unsqueeze(0)  # Expand delta to match batch size
+        
+        # Apply clipping to ensure each feature remains within its valid range
+        X_hat = torch.clamp(X_hat, min=self.min_X, max=self.max_X)
+        
+        return X_hat
+    
+
+    def compute_mode(self):
+
+        """
+        Computes the mode vector of the entire training dataset \( D \) known by the attacker.
+        
+        The mode vector \( \text{Mode}(X) \) has each element \( \text{Mode}(X)^{(j)} \) as the mode of feature \( j \).
+        
+        Returns:
+            mode_vector (torch.Tensor): A tensor containing the mode value for each feature.
+        """
+
+        logging.info("Computing mode vector of the entire training dataset...")
+        
+        # Extract training data
+        X_train, _ = self.data_obj._get_dataset_data(self.converted_dataset[0])
+        
+        # Convert to Pandas DataFrame for mode computation
+        X_train_df = pd.DataFrame(X_train)
+        
+        # Compute mode for each feature
+        mode_values = X_train_df.mode().iloc[0].values  # mode() returns a DataFrame; take the first row
+        
+        # Convert to PyTorch tensor and move to device
+        self.mode_vector = torch.tensor(mode_values, dtype=torch.float32).to(self.device)
+        
+        logging.info("Mode vector computed successfully.")
+        
+        return self.mode_vector
+    
+
+
+    def optimize_trigger(self, num_epochs=200, learning_rate=0.0001, batch_size=64, verbose=True):
+        """
+        Optimizes the universal trigger pattern \( \delta \) by minimizing the loss function over D_picked.
+
+        The loss function is defined as:
+        \[
+        \mathcal{L}(\delta) = \frac{1}{|D_{\text{picked}}|} \sum_{(x_i, y_i) \in D_{\text{picked}}} \left[ -\log f_t( \hat{x}_i ) + \beta \| \hat{x}_i - \text{Mode}(X) \|_1 + \lambda \| \hat{x}_i - \text{Mode}(X) \|_2^2 \right]
+        \]
+
+        This optimization balances three objectives:
+            1. Maximizing the model's confidence in predicting the target class \( t \) for the backdoored inputs.
+            2. Ensuring the trigger pattern \( \delta \) keeps the modified inputs close to common data patterns (via the mode) to enhance stealthiness.
+            3. Regularizing \( \delta \) to prevent large perturbations that could be easily detected.
+
+        Args:
+            num_epochs (int, optional): Number of optimization epochs. Defaults to 100.
+            learning_rate (float, optional): Learning rate for the optimizer. Defaults to 0.01.
+            batch_size (int, optional): Number of samples per batch for optimization. Defaults to 64.
+            verbose (bool, optional): If True, logs loss every 10 epochs. Defaults to True.
+        
+        Returns:
+            None
+        """
+        if self.D_picked is None:
+            raise ValueError("D_picked is not initialized. Please run confidence_based_sample_ranking() first.")
+        
+        if self.delta is None:
+            raise ValueError("Trigger pattern (delta) is not defined. Please run define_trigger() first.")
+        
+        logging.info("Starting optimization of the trigger pattern (delta)...")
+        
+        # Define the optimizer for delta
+        optimizer = torch.optim.Adam([self.delta], lr=learning_rate)
+        
+        # Define the DataLoader for D_picked
+        picked_loader = DataLoader(self.D_picked, batch_size=batch_size, shuffle=True)
+        
+        # Ensure that the mode vector is computed
+        if self.mode_vector is None:
+            self.compute_mode()
+        
+        # Set the model to evaluation mode to disable dropout, etc.
+        self.model.eval()
+        
+        for epoch in range(1, num_epochs + 1):
+            epoch_loss = 0.0
+            for X_batch, y_batch in picked_loader:
+                # Move data to device
+                X_batch = X_batch.to(self.device)
+                y_batch = y_batch.to(self.device)
+                
+                # Zero the gradients
+                optimizer.zero_grad()
+                
+                # Apply the trigger to the inputs
+                X_hat = self.apply_trigger(X_batch)
+                
+                # Forward pass to get logits
+                logits = self.model.forward(X_hat)
+                
+                # Apply softmax to get probabilities
+                probabilities = torch.softmax(logits, dim=1)
+                
+                # Extract the probability for the target class
+                f_t = probabilities[:, self.target_label]
+                
+                # Compute the negative log-likelihood loss
+                nll_loss = -torch.log(f_t + 1e-8).mean()
+                
+                # Compute the L1 and L2 regularization terms
+                l1_loss = torch.norm(X_hat - self.mode_vector, p=1)
+                l2_loss = torch.norm(X_hat - self.mode_vector, p=2)**2
+                
+                # Total loss
+                loss = nll_loss + self.beta * l1_loss + self.lambd * l2_loss
+                
+                # Backward pass
+                loss.backward()
+                
+                # Update delta
+                optimizer.step()
+                
+                # Accumulate loss
+                epoch_loss += loss.item()
+            
+            # Logging
+            if verbose and epoch % 10 == 0:
+                avg_loss = epoch_loss / len(picked_loader)
+                logging.info(f"Epoch [{epoch}/{num_epochs}], Loss: {avg_loss:.4f}")
+        
+        logging.info("Trigger pattern (delta) optimization completed.")
+        self.save_trigger()
+
+
+
+
+
+    def save_trigger(self, filepath=None):
+        """
+        Saves the optimized trigger pattern \( \delta \) to disk for future use.
+
+        Args:
+            filepath (str, optional): Path to save the trigger file. Defaults to 'delta.pt'.
+        """
+        if self.delta is None:
+            raise ValueError("Trigger pattern (delta) is not defined. Please run define_trigger() first.")
+        
+        # Detach delta from the computation graph and move to CPU
+        delta_cpu = self.delta.detach().cpu()
+
+        if filepath is None:
+            file_dir = Path("./saved_triggers")
+            # Create the directory if it doesn't exist
+            file_dir.mkdir(parents=True, exist_ok=True)
+            # Define the default filepath
+            filepath = file_dir / f"{self.data_obj.dataset_name}_{self.model.model_name}_{self.target_label}_{self.mu}_{self.beta}_{self.lambd}_delta.pt"
+        
+        # Save the delta tensor
+        torch.save(delta_cpu, filepath)
+        
+        logging.info(f"Optimized trigger pattern (delta) saved to '{filepath}'.")
+
+    def load_trigger(self, filepath=None):
+        """
+        Loads a previously saved trigger pattern \( \delta \) from disk.
+
+        Args:
+            filepath (str, optional): Path to the trigger file. Defaults to 'delta.pt'.
+        
+        Raises:
+            FileNotFoundError: If the specified trigger file does not exist.
+        """
+        if filepath is None:
+            file_dir = Path("./saved_triggers")
+            # Define the default filepath
+            filepath = file_dir / f"{self.data_obj.dataset_name}_{self.model.model_name}_{self.target_label}_{self.mu}_{self.beta}_{self.lambd}_delta.pt"
+
+        if not filepath.exists():
+            raise FileNotFoundError(f"The trigger file '{filepath}' does not exist.")
+        
+        # Load the delta tensor and move to device
+        self.delta = torch.load(filepath, map_location=self.device)
+        
+        # Ensure that delta requires gradient for further optimization if needed
+        self.delta.requires_grad = True
+        
+        logging.info(f"Trigger pattern (delta) loaded from '{filepath}'.")
+
+
+
+    def construct_poisoned_dataset(self, epsilon=0.1, random_state=None):
+        """
+        Constructs the poisoned dataset by injecting the optimized trigger into a fraction epsilon of the dataset D.
+        
+        Steps:
+            1. Determine the number of samples to poison based on epsilon.
+            2. Randomly select epsilon fraction of the training dataset to poison.
+            3. Apply the optimized trigger delta* to the selected samples.
+            4. Relabel the poisoned samples to the target class t.
+            5. Combine the poisoned samples with the remaining clean samples to form the final poisoned dataset D'.
+            6. Optionally, revert the numerical encoding to original categorical features for analysis or storage.
+
+        Args:
+            epsilon (float, optional): Fraction of the dataset to poison. Must be in (0, 1]. Defaults to 0.1.
+            random_state (int, optional): Random state for reproducibility. Defaults to None.
+        
+        Returns:
+            poisoned_dataset (TensorDataset): The final poisoned training dataset \( D' \).
+            poisoned_samples (TensorDataset): The set of poisoned samples.
+        """
+
+        if self.D_picked is None:
+            raise ValueError("D_picked is not initialized. Please run confidence_based_sample_ranking() first.")
+        
+        if self.delta is None:
+            raise ValueError("Trigger pattern (delta) is not defined. Please run define_trigger() first.")
+        
+        if not (0 < epsilon <= 1):
+            raise ValueError("Epsilon must be in the range (0, 1].")
+        
+        logging.info(f"Starting construction of the poisoned dataset with epsilon={epsilon}...")
+        
+        # Extract the original training dataset
+        X_train, y_train = self.data_obj._get_dataset_data(self.converted_dataset[0])
+        X_train_tensor = torch.tensor(X_train, dtype=torch.float32).to(self.device)
+        y_train_tensor = torch.tensor(y_train, dtype=torch.long).to(self.device)
+        
+        # Determine the number of samples to poison
+        N = len(X_train_tensor)
+        N_poison = int(epsilon * N)
+        logging.info(f"Number of samples to poison: {N_poison} out of {N} total training samples.")
+        
+        # Set random seed for reproducibility if provided
+        if random_state is not None:
+            np.random.seed(random_state)
+        
+        # Randomly select indices to poison
+        poison_indices = np.random.choice(N, N_poison, replace=False)
+        logging.info(f"Selected {len(poison_indices)} random samples for poisoning.")
+        
+        # Create a mask for all indices
+        mask = np.ones(N, dtype=bool)
+        mask[poison_indices] = False
+        
+        # Separate clean and selected samples
+        X_clean = X_train_tensor[mask]
+        y_clean = y_train_tensor[mask]
+        
+        X_selected = X_train_tensor[poison_indices]
+        y_selected = y_train_tensor[poison_indices]  # Original labels, which will be overwritten
+        
+        # Apply the optimized trigger to the selected samples
+        X_poisoned = self.apply_trigger(X_selected)
+
+        # Round the r_jl values of the poisoned samples
+        X_poisoned = self.data_obj.round_rjl(X_poisoned)
+        
+        # Relabel the poisoned samples to the target class
+        y_poisoned = torch.full((N_poison,), self.target_label, dtype=torch.long).to(self.device)
+        
+        logging.info("Applied trigger to selected samples and relabeled them to the target class.")
+        
+        # Combine clean and poisoned samples to form the final poisoned dataset D'
+        # Ensure all tensors are on the same device before concatenation
+        device = self.device  # Assuming self.device is defined
+        X_clean = X_clean.to(device)
+        X_poisoned = X_poisoned.to(device)
+        y_clean = y_clean.to(device)
+        y_poisoned = y_poisoned.to(device)
+
+        # Concatenate tensors on the same device
+        X_poisoned_dataset = torch.cat((X_clean, X_poisoned), dim=0)
+        y_poisoned_dataset = torch.cat((y_clean, y_poisoned), dim=0)
+        
+        # Shuffle the poisoned dataset to mix poisoned and clean samples
+        indices = torch.randperm(X_poisoned_dataset.size(0))
+        X_poisoned_dataset = X_poisoned_dataset[indices]
+        y_poisoned_dataset = y_poisoned_dataset[indices]
+        
+        # Create the poisoned TensorDataset
+        self.poisoned_dataset = TensorDataset(X_poisoned_dataset, y_poisoned_dataset)
+        self.poisoned_samples = TensorDataset(X_poisoned, y_poisoned)
+        
+        logging.info(f"Poisoned dataset constructed with {len(self.poisoned_dataset)} samples.")
+
+        self.save_poisoned_dataset()
+        
+        return self.poisoned_dataset, self.poisoned_samples
+
+
+    def save_poisoned_dataset(self, filepath=None):
+        """
+        Saves the poisoned dataset \( D' \) to disk for future use.
+
+        Args:
+            filepath (str, optional): Path to save the poisoned dataset file. Defaults to 'poisoned_dataset.pt'.
+        """
+        if self.poisoned_dataset is None:
+            raise ValueError("Poisoned dataset is not constructed. Please run construct_poisoned_dataset() first.")
+        if self.poisoned_samples is None:
+            raise ValueError("Poisoned samples are not constructed. Please run construct_poisoned_dataset() first.")
+        
+        if filepath is None:
+            file_dir = Path("./saved_datasets")
+            # Create the directory if it doesn't exist
+            file_dir.mkdir(parents=True, exist_ok=True)
+            # Define the default filepath
+            filepath = file_dir / f"{self.data_obj.dataset_name}_{self.model.model_name}_{self.target_label}_{self.mu}_{self.beta}_{self.lambd}_poisoned_dataset.pt"
+        
+        # Save the poisoned dataset tensors
+        torch.save({
+            'X_poisoned': self.poisoned_dataset.tensors[0].detach().cpu(),
+            'y_poisoned': self.poisoned_dataset.tensors[1].detach().cpu(),
+            'X_poisoned_samples': self.poisoned_samples.tensors[0].detach().cpu(),
+            'y_poisoned_samples': self.poisoned_samples.tensors[1].detach().cpu()
+        }, filepath)
+        
+        logging.info(f"Poisoned dataset saved to '{filepath}'.")
+
+    def load_poisoned_dataset(self, filepath=None):
+        """
+        Loads a previously saved poisoned dataset \( D' \) from disk.
+
+        Args:
+            filepath (str, optional): Path to the poisoned dataset file. Defaults to 'poisoned_dataset.pt'.
+        
+        Raises:
+            FileNotFoundError: If the specified poisoned dataset file does not exist.
+        """
+        if filepath is None:
+            file_dir = Path("./saved_datasets")
+            # Define the default filepath
+            filepath = file_dir / f"{self.data_obj.dataset_name}_{self.model.model_name}_{self.target_label}_{self.mu}_{self.beta}_{self.lambd}_poisoned_dataset.pt"
+
+        if not filepath.exists():
+            raise FileNotFoundError(f"The poisoned dataset file '{filepath}' does not exist.")
+        
+        # Load the poisoned dataset tensors
+        data = torch.load(filepath, map_location=self.device)
+        X_poisoned = data['X_poisoned']
+        y_poisoned = data['y_poisoned']
+        X_poisoned_samples = data['X_poisoned_samples']     
+        y_poisoned_samples = data['y_poisoned_samples']
+        
+        # Create the TensorDataset
+        self.poisoned_dataset = TensorDataset(X_poisoned.to(self.device), y_poisoned.to(self.device))
+        self.poisoned_samples = TensorDataset(X_poisoned_samples.to(self.device), y_poisoned_samples.to(self.device))
+        
+        logging.info(f"Poisoned dataset loaded from '{filepath}' with {len(self.poisoned_dataset)} samples.")
+
 
 
 # ============================================
@@ -297,6 +744,22 @@ def main():
     D_non_target = attack.select_non_target_samples()
     D_picked = attack.confidence_based_sample_ranking()
 
+    attack.define_trigger()
+    attack.compute_mode()
+
+    # attack.optimize_trigger()
+
+    attack.load_trigger()
+
+
+    print(attack.delta)
+
+    # print(attack.mode_vector)
+
+    attack.construct_poisoned_dataset()
+
+    # attack.load_poisoned_dataset()
+    reverted_dataset = attack.data_obj.Revert(attack.poisoned_dataset)
 
 
 
@@ -305,4 +768,8 @@ if __name__ == "__main__":
     main()
 
 
-# TODO: test the two new methods: confidence_based_sample_ranking
+
+# TODO: Unite test all the methods in the Attack class. 
+
+# TODO:: test revert method in the CovType class. 
+

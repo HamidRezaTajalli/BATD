@@ -17,6 +17,9 @@ class CovType:
     
     def __init__(self, test_size=0.2, random_state=42, batch_size=64):
 
+        self.dataset_name = "covtype"
+
+
         # Define the categorical and numerical columns
         self.cat_cols = [
             "Wilderness_Area_0", "Wilderness_Area_1", "Wilderness_Area_2", "Wilderness_Area_3",
@@ -46,6 +49,10 @@ class CovType:
         data = fetch_covtype(as_frame=True)  # Load data as pandas DataFrame
         X = data['data']  # Features
         y = data['target']  # Target (Forest cover type classification)
+
+
+        # Retrieve the feature names from the dataset: in the same order as they appear in the dataset
+        self.feature_names = X.columns.tolist()
         
         # Store original dataset for reference
         self.X_original = X.copy()
@@ -355,38 +362,6 @@ class CovType:
         """
         return self.lookup_tables
     
-    def Revert(self, converted_dataset):
-        """
-        Reverts the converted numerical values back to their original categorical values.
-        
-        Args:
-            converted_dataset (pd.DataFrame): The dataset with converted numerical categorical features.
-        
-        Returns:
-            pd.DataFrame: The dataset with original categorical features restored.
-        """
-        # Create a copy to avoid modifying the original dataset
-        reverted_dataset = converted_dataset.copy()
-        
-        # Iterate over each categorical feature
-        for col in self.cat_cols:
-            # Iterate over each row in the dataset
-            for idx, r_prime in reverted_dataset[col].items():
-                # Round r_prime to 4 decimal places to match the lookup table
-                r_prime_rounded = round(r_prime, 4)
-                
-                # Retrieve the original category using the lookup table
-                category = self.lookup_tables[col].get(r_prime_rounded, None)
-                
-                if category is not None:
-                    reverted_dataset.at[idx, col] = category
-                else:
-                    # Handle cases where r_prime is not found in the lookup table
-                    # This could be due to rounding errors or invalid values
-                    # Assign a default category or handle as needed
-                    reverted_dataset.at[idx, col] = 'Unknown'
-        
-        return reverted_dataset
     
     def Conv(self):
         """
@@ -548,3 +523,111 @@ class CovType:
 
 
         return X, y
+    
+
+    def round_rjl(self, X:torch.Tensor) -> torch.Tensor:
+        """
+        Rounds the r_jl values of categorical features to the nearest valid r_jl in the lookup tables.
+        
+        For each categorical feature in X, this method finds the closest r_jl value from the lookup_tables
+        and assigns it to the feature. This ensures that all crafted samples have valid r_jl values.
+        
+        Args:
+            X (torch.Tensor): Input tensor with shape (batch_size, d).
+        
+        Returns:
+            torch.Tensor: Tensor with rounded r_jl values for categorical features.
+        """
+        if not isinstance(X, torch.Tensor):
+            raise TypeError("Input X must be a torch.Tensor.")
+        
+        # Clone X to avoid modifying the original tensor
+        X_rounded = X.clone().detach().cpu().numpy()
+        
+        # Iterate over each categorical feature
+        for col in self.cat_cols:
+            # Get the column index
+            try:
+                col_idx = self.feature_names.index(col)
+            except ValueError:
+                raise ValueError(f"Categorical feature '{col}' not found in feature names.")
+            
+            # Get the list of valid r_jl values sorted
+            rjl_values = np.array(sorted(self.lookup_tables[col].keys()))
+            
+            # Get the current column values
+            feature_values = X_rounded[:, col_idx]
+            
+            # Find the nearest r_jl for each value
+            # Compute the absolute differences
+            diff = np.abs(feature_values[:, np.newaxis] - rjl_values[np.newaxis, :])
+            
+            # Find the index of the smallest difference
+            closest_indices = np.argmin(diff, axis=1)
+            
+            # Get the closest r_jl values
+            closest_rjl = rjl_values[closest_indices]
+            
+            # Update the feature column with the closest r_jl
+            X_rounded[:, col_idx] = closest_rjl
+        
+        # Convert back to torch.Tensor and move to device
+        X_rounded_tensor = torch.tensor(X_rounded, dtype=torch.float32)
+        
+        return X_rounded_tensor
+    
+
+    def Revert(self, converted_dataset: TensorDataset) -> TensorDataset:
+        """
+        Reverts the converted numerical values back to their original categorical values.
+
+        Args:
+            converted_dataset (TensorDataset): The dataset with converted numerical categorical features.
+
+        Returns:
+            TensorDataset: The dataset with original categorical features restored.
+
+        Raises:
+            ValueError: If a numerical value does not have a corresponding key in the lookup table.
+        """
+        # Extract features and labels from the TensorDataset
+        X_tensor, y_tensor = converted_dataset.tensors
+
+        # Convert to numpy for easier manipulation
+        X_np = X_tensor.cpu().numpy()
+
+        # Iterate over each categorical feature
+        for col in self.cat_cols:
+            # Get the column index
+            try:
+                col_idx = self.feature_names.index(col)
+            except ValueError:
+                raise ValueError(f"Categorical feature '{col}' not found in feature names.")
+
+            # Get the current column values
+            feature_values = X_np[:, col_idx]
+
+            # Revert each value using the lookup table
+            for i, r_prime in enumerate(feature_values):
+                # Round r_prime to 4 decimal places to match the lookup table
+                # r_prime_rounded = round(r_prime, 4)
+                r_prime_rounded = r_prime
+
+                # Retrieve the original category using the lookup table
+                category = self.lookup_tables[col].get(r_prime_rounded, None)
+
+                if category is not None:
+                    X_np[i, col_idx] = category
+                else:
+                    # Raise an error if the r_prime value is not found in the lookup table
+                    available_keys = list(self.lookup_tables[col].keys())
+                    raise ValueError(
+                        f"Value {r_prime_rounded} for feature '{col}' not found in lookup table. "
+                        f"Available keys: {available_keys}"
+                    )
+
+        # Convert back to torch.Tensor
+        X_reverted_tensor = torch.tensor(X_np, dtype=torch.float32)
+
+        # Return the reverted dataset as a TensorDataset
+        return TensorDataset(X_reverted_tensor, y_tensor)
