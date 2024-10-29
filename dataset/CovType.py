@@ -81,7 +81,7 @@ class CovType:
         self.lookup_tables = {col: {} for col in self.cat_cols}
     
 
-    def get_normal_datasets(self, test_size=None, random_state=None, batch_size=None):
+    def get_normal_datasets(self, test_size=None, random_state=None, batch_size=None) -> Tuple[TensorDataset, TensorDataset]:
 
         if test_size is None:
             test_size = self.test_size

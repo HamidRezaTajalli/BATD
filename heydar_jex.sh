@@ -6,7 +6,7 @@
 #SBATCH --cpus-per-task=4
 #SBATCH --partition=gpu_a100
 ##SBATCH --partition=gpu_h100
-#SBATCH --time=0-1:00:00
+#SBATCH --time=0-2:00:00
 #SBATCH --mem=16GB
 #SBATCH --output=script_logging/slurm_%A.out
 #SBATCH --mail-type=END,FAIL                     # send email when job ends or fails
@@ -18,7 +18,7 @@
 module load 2023
 module load Python/3.11.3-GCCcore-12.3.0
 
-srun python attack.py
+srun python step_by_step.py
 
 
 

@@ -4,14 +4,8 @@ from pathlib import Path
 import pandas as pd
 import numpy as np
 import logging
-from sklearn.model_selection import train_test_split
 import torch
-from dataset.CovType import CovType  # Importing the ConvertCovType class from CovType.py
-from models.Tabnet import TabNetModel             # Importing the TabNet model from TabNet.py
 from torch.utils.data import TensorDataset, DataLoader
-
-# Import time module for Unix timestamp
-import time
 
 # ============================================
 # Logging Configuration
@@ -50,8 +44,9 @@ class Attack:
         mode_vector (torch.Tensor): The mode vector of the entire dataset \( D \).
         beta (float): Hyperparameter controlling the \( L_1 \) regularization term.
         lambd (float): Hyperparameter controlling the \( L_2 \) regularization term.
-        poisoned_dataset (TensorDataset): The final poisoned training dataset \( D' \).
-        poisoned_samples (TensorDataset): The poisoned samples.
+        poisoned_dataset (tuple): A tuple containing the poisoned training and testing datasets.
+        poisoned_samples (tuple): A tuple containing the poisoned training and testing samples.
+
     """
     
     def __init__(self, device, model, data_obj, target_label=1, mu=0.2, beta=0.1, lambd=0.1):
@@ -59,6 +54,7 @@ class Attack:
         Initializes the class for performing a backdoor attack on a model.
 
         Parameters:
+        device (torch.device): The device (CPU or GPU) on which computations are performed.
         model (TabNetModel): The TabNet model instance.
         data_obj (CovType): The CovType dataset instance.
         target_label (int): The label of the target class for the backdoor attack.
@@ -105,43 +101,51 @@ class Attack:
         self.beta = beta
         self.lambd = lambd
 
+         # Initialize the poisoned dataset and samples as None
+        self.poisoned_dataset = (None, None)
+        self.poisoned_samples = (None, None)
+
         
         logging.info(f"Attack initialized with target label: {self.target_label}")
         
     
-    def train(self):
+    def train(self, dataset):
         """
-        Trains the TabNet model on the training set.
+        Trains the model on the training set.
 
         Returns:
         None
         """
-        # Convert training data to the required format
-        X_train, y_train = self.data_obj._get_dataset_data(self.converted_dataset[0])
+
+        if self.model.model_name == "TabNet":
+
+            # Convert training data to the required format
+            X_train, y_train = self.data_obj._get_dataset_data(dataset)
 
 
-        # Train the model
-        self.model.fit(
-            X_train=X_train, 
-            y_train=y_train
-        )
+            # Train the model
+            self.model.fit(
+                X_train=X_train, 
+                y_train=y_train
+            )
     
-    def test(self):
+    def test(self, dataset):
         """
-        Tests the trained TabNet model on the test set.
+        Tests the trained model on the test set.
 
         Returns:
         accuracy (float): Accuracy of the model on the test set.
         """
-        # Convert test data to the required format
-        X_test, y_test = self.data_obj._get_dataset_data(self.converted_dataset[1])
+        if self.model.model_name == "TabNet":
+            # Convert test data to the required format
+            X_test, y_test = self.data_obj._get_dataset_data(dataset)
 
-        # Make predictions on the test data
-        preds = self.model.predict(X_test)
+            # Make predictions on the test data
+            preds = self.model.predict(X_test)
 
-        # Calculate accuracy using NumPy
-        accuracy = (preds == y_test).mean()
-        print(f"Test Accuracy: {accuracy * 100:.2f}%")
+            # Calculate accuracy using NumPy
+            accuracy = (preds == y_test).mean()
+            print(f"Test Accuracy: {accuracy * 100:.2f}%")
 
         return accuracy
     
@@ -396,8 +400,8 @@ class Attack:
             3. Regularizing \( \delta \) to prevent large perturbations that could be easily detected.
 
         Args:
-            num_epochs (int, optional): Number of optimization epochs. Defaults to 100.
-            learning_rate (float, optional): Learning rate for the optimizer. Defaults to 0.01.
+            num_epochs (int, optional): Number of optimization epochs. Defaults to 200.
+            learning_rate (float, optional): Learning rate for the optimizer. Defaults to 0.0001.
             batch_size (int, optional): Number of samples per batch for optimization. Defaults to 64.
             verbose (bool, optional): If True, logs loss every 10 epochs. Defaults to True.
         
@@ -531,7 +535,7 @@ class Attack:
 
 
 
-    def construct_poisoned_dataset(self, epsilon=0.1, random_state=None):
+    def construct_poisoned_dataset(self, dataset, epsilon=0.1, random_state=None):
         """
         Constructs the poisoned dataset by injecting the optimized trigger into a fraction epsilon of the dataset D.
         
@@ -544,6 +548,7 @@ class Attack:
             6. Optionally, revert the numerical encoding to original categorical features for analysis or storage.
 
         Args:
+            dataset (TensorDataset): The dataset to poison.
             epsilon (float, optional): Fraction of the dataset to poison. Must be in (0, 1]. Defaults to 0.1.
             random_state (int, optional): Random state for reproducibility. Defaults to None.
         
@@ -564,7 +569,7 @@ class Attack:
         logging.info(f"Starting construction of the poisoned dataset with epsilon={epsilon}...")
         
         # Extract the original training dataset
-        X_train, y_train = self.data_obj._get_dataset_data(self.converted_dataset[0])
+        X_train, y_train = self.data_obj._get_dataset_data(dataset)
         X_train_tensor = torch.tensor(X_train, dtype=torch.float32).to(self.device)
         y_train_tensor = torch.tensor(y_train, dtype=torch.long).to(self.device)
         
@@ -620,13 +625,12 @@ class Attack:
         X_poisoned_dataset = X_poisoned_dataset[indices]
         y_poisoned_dataset = y_poisoned_dataset[indices]
         
-        # Create the poisoned TensorDataset
-        self.poisoned_dataset = TensorDataset(X_poisoned_dataset, y_poisoned_dataset)
-        self.poisoned_samples = TensorDataset(X_poisoned, y_poisoned)
         
-        logging.info(f"Poisoned dataset constructed with {len(self.poisoned_dataset)} samples.")
-
-        self.save_poisoned_dataset()
+        # Create the poisoned TensorDataset
+        poisoned_dataset = TensorDataset(X_poisoned_dataset, y_poisoned_dataset)
+        poisoned_samples = TensorDataset(X_poisoned, y_poisoned)
+        
+        logging.info(f"Poisoned dataset constructed with {len(poisoned_dataset)} samples.")
 
 
         #####################################
@@ -652,7 +656,7 @@ class Attack:
         #####################################
 
         
-        return self.poisoned_dataset, self.poisoned_samples
+        return poisoned_dataset, poisoned_samples
 
 
     def save_poisoned_dataset(self, filepath=None):
@@ -662,10 +666,10 @@ class Attack:
         Args:
             filepath (str, optional): Path to save the poisoned dataset file. Defaults to 'poisoned_dataset.pt'.
         """
-        if self.poisoned_dataset is None:
-            raise ValueError("Poisoned dataset is not constructed. Please run construct_poisoned_dataset() first.")
-        if self.poisoned_samples is None:
-            raise ValueError("Poisoned samples are not constructed. Please run construct_poisoned_dataset() first.")
+        if self.poisoned_dataset[0] is None or self.poisoned_dataset[1] is None:
+            raise ValueError("Poisoned dataset is not constructed. Please run construct_poisoned_dataset() first and save train and test datasets in a tuple.")
+        if self.poisoned_samples[0] is None or self.poisoned_samples[1] is None:
+            raise ValueError("Poisoned samples are not constructed. Please run construct_poisoned_dataset() first and save train and test samples in a tuple.")
         
         if filepath is None:
             file_dir = Path("./saved_datasets")
@@ -676,10 +680,10 @@ class Attack:
         
         # Save the poisoned dataset tensors
         torch.save({
-            'X_poisoned': self.poisoned_dataset.tensors[0].detach().cpu(),
-            'y_poisoned': self.poisoned_dataset.tensors[1].detach().cpu(),
-            'X_poisoned_samples': self.poisoned_samples.tensors[0].detach().cpu(),
-            'y_poisoned_samples': self.poisoned_samples.tensors[1].detach().cpu()
+            'poisoned_trainset': self.poisoned_dataset[0],
+            'poisoned_testset': self.poisoned_dataset[1],
+            'poisoned_train_samples': self.poisoned_samples[0],
+            'poisoned_test_samples': self.poisoned_samples[1]
         }, filepath)
         
         logging.info(f"Poisoned dataset saved to '{filepath}'.")
@@ -704,93 +708,13 @@ class Attack:
         
         # Load the poisoned dataset tensors
         data = torch.load(filepath, map_location=self.device)
-        X_poisoned = data['X_poisoned']
-        y_poisoned = data['y_poisoned']
-        X_poisoned_samples = data['X_poisoned_samples']     
-        y_poisoned_samples = data['y_poisoned_samples']
+        
         
         # Create the TensorDataset
-        self.poisoned_dataset = TensorDataset(X_poisoned.to(self.device), y_poisoned.to(self.device))
-        self.poisoned_samples = TensorDataset(X_poisoned_samples.to(self.device), y_poisoned_samples.to(self.device))
+        self.poisoned_dataset = (data['poisoned_trainset'], data['poisoned_testset'])
+        self.poisoned_samples = (data['poisoned_train_samples'], data['poisoned_test_samples'])
         
-        logging.info(f"Poisoned dataset loaded from '{filepath}' with {len(self.poisoned_dataset)} samples.")
-
-
-
-# ============================================
-# Main Execution Block
-# ============================================
-
-def main():
-    """
-    The main function orchestrates the attack setup by executing the initial model training steps.
-    """
-    logging.info("=== Starting Initial Model Training ===")
-    
-    # Step 1: Initialize the dataset converter
-    data_obj = CovType()
-
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    # Step 2: Initialize the TabNet model
-    model = TabNetModel(
-            n_d=64,
-            n_a=64,
-            n_steps=5,
-            gamma=1.5,
-            n_independent=2,
-            n_shared=2,
-            momentum=0.3,
-            mask_type='entmax'
-        )
-        
-    model.to(device)
-
-
-    attack = Attack(device=device, model=model, data_obj=data_obj)
-
-    # load the trained model
-    attack.model.load_model("./saved_models/tabnet_1729536738.zip")
-    attack.model.to(device)
-    
-
-    # attack.train()
-    attack.test()
-
-    # Get current Unix timestamp
-    unix_timestamp = int(time.time())
-
-    # # Save the model with Unix timestamp in the filename
-    # attack.model.save_model(f"./saved_models/tabnet_{unix_timestamp}")
-    
-    logging.info("=== Initial Model Training Completed ===")
-
-
-    D_non_target = attack.select_non_target_samples()
-    D_picked = attack.confidence_based_sample_ranking()
-
-    attack.define_trigger()
-    attack.compute_mode()
-
-    attack.optimize_trigger()
-
-    attack.load_trigger()
-
-
-    print(attack.delta)
-
-    print(attack.mode_vector)
-
-    attack.construct_poisoned_dataset()
-
-
-    # attack.load_poisoned_dataset()
-    reverted_dataset = attack.data_obj.Revert(attack.poisoned_samples)
-
-
-
-# Execute the main function when the script is run directly
-if __name__ == "__main__":
-    main()
+        logging.info(f"Poisoned dataset loaded from '{filepath}' with {len(self.poisoned_dataset[0])} samples in trainset and {len(self.poisoned_dataset[1])} samples in testset.")
 
 
 

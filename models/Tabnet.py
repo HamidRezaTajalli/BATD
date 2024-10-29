@@ -19,7 +19,7 @@ class TabNetModel:
         
 
         """
-        self.model_name = "tabnet"
+        self.model_name = "TabNet"
         self.n_d = n_d
         self.n_a = n_a
         self.n_steps = n_steps
