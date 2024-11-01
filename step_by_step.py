@@ -47,7 +47,7 @@ def main():
     mu = 0.2
     beta = 0.1
     lambd = 0.1
-    epsilon = 0.1
+    epsilon = 0.02
     
     # Step 1: Initialize the dataset object which can handle, convert and revert the dataset.
     data_obj = CovType()
@@ -118,7 +118,7 @@ def main():
 
     # Step 10: Construct the poisoned dataset
 
-    poisoned_trainset, poisoned_train_samples = attack.construct_poisoned_dataset(attack.converted_dataset[0])
+    poisoned_trainset, poisoned_train_samples = attack.construct_poisoned_dataset(attack.converted_dataset[0], epsilon=epsilon)
     poisoned_testset, poisoned_test_samples = attack.construct_poisoned_dataset(attack.converted_dataset[1], epsilon=1)
     attack.poisoned_dataset = (poisoned_trainset, poisoned_testset)
     attack.poisoned_samples = (poisoned_train_samples, poisoned_test_samples)

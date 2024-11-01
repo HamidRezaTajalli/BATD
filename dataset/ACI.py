@@ -5,62 +5,45 @@ import numpy as np
 import pandas as pd
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import OrdinalEncoder, StandardScaler
-from sklearn.datasets import fetch_covtype
 import torch
 from torch.utils.data import DataLoader, TensorDataset
+import shap
 
 
-class CovType:
+
+class ACI:
     """
-    This class is used to load the CoverType dataset and convert it into a format suitable for training a model.
+    This class is used to load the ACI dataset and convert it into a format suitable for training a model.
     """
-    
+
     def __init__(self, test_size=0.2, random_state=42, batch_size=64):
 
-        self.dataset_name = "covtype"
-        self.num_classes = 7
-
+        self.dataset_name = "aci"
+        self.num_classes = 2
 
         # Define the categorical and numerical columns
-        self.cat_cols = [
-            "Wilderness_Area_0", "Wilderness_Area_1", "Wilderness_Area_2", "Wilderness_Area_3",
-            "Soil_Type_0", "Soil_Type_1", "Soil_Type_2", "Soil_Type_3", "Soil_Type_4",
-            "Soil_Type_5", "Soil_Type_6", "Soil_Type_7", "Soil_Type_8", "Soil_Type_9",
-            "Soil_Type_10", "Soil_Type_11", "Soil_Type_12", "Soil_Type_13", "Soil_Type_14",
-            "Soil_Type_15", "Soil_Type_16", "Soil_Type_17", "Soil_Type_18", "Soil_Type_19",
-            "Soil_Type_20", "Soil_Type_21", "Soil_Type_22", "Soil_Type_23", "Soil_Type_24",
-            "Soil_Type_25", "Soil_Type_26", "Soil_Type_27", "Soil_Type_28", "Soil_Type_29",
-            "Soil_Type_30", "Soil_Type_31", "Soil_Type_32", "Soil_Type_33", "Soil_Type_34",
-            "Soil_Type_35", "Soil_Type_36", "Soil_Type_37", "Soil_Type_38", "Soil_Type_39"
-        ]
+        self.cat_cols = ['Workclass', 'Marital Status', 'Occupation', 'Relationship', 'Race', 'Sex', 'Country']
         
-        self.num_cols = [
-            "Elevation", "Aspect", "Slope", "Horizontal_Distance_To_Hydrology",
-            "Vertical_Distance_To_Hydrology", "Horizontal_Distance_To_Roadways",
-            "Hillshade_9am", "Hillshade_Noon", "Hillshade_3pm",
-            "Horizontal_Distance_To_Fire_Points"
-        ]
+        self.num_cols = ['Age', 'Education-Num', 'Capital Gain', 'Capital Loss', 'Hours per week']
 
         self.test_size = test_size
         self.random_state = random_state
         self.batch_size = batch_size
 
-
-        # Load the CoverType dataset from sklearn as a pandas DataFrame
-        data = fetch_covtype(as_frame=True)  # Load data as pandas DataFrame
-        X = data['data']  # Features
-        y = data['target']  # Target (Forest cover type classification)
-
+        # Load the ACI dataset from shap
+        X, y = shap.datasets.adult()
 
         # Retrieve the feature names from the dataset: in the same order as they appear in the dataset
         self.feature_names = X.columns.tolist()
 
         self.column_idx = {col: idx for idx, col in enumerate(self.feature_names)}
-        
+
         # Store original dataset for reference
         self.X_original = X.copy()
-        self.y = y.copy()
-        
+        # Convert boolean target to binary (0 and 1)
+        self.y = y.astype(int).copy()
+
+
         # Convert categorical columns using OrdinalEncoder
         # This transforms categorical string labels into integer encodings
         ordinal_encoder = OrdinalEncoder()
@@ -70,7 +53,7 @@ class CovType:
         # Apply StandardScaler to numerical features to standardize them
         scaler = StandardScaler()
         self.X_encoded[self.num_cols] = scaler.fit_transform(self.X_encoded[self.num_cols])
-        
+
         # Initialize a dictionary to store the primary mappings for each categorical feature
         self.primary_mappings = {col: {} for col in self.cat_cols}
 
@@ -82,7 +65,7 @@ class CovType:
         
         # Initialize a dictionary to store the lookup tables for reverse mapping
         self.lookup_tables = {col: {} for col in self.cat_cols}
-    
+
 
     def get_normal_datasets(self, test_size=None, random_state=None, batch_size=None) -> Tuple[TensorDataset, TensorDataset]:
 
@@ -102,11 +85,11 @@ class CovType:
         
         # Convert the data to PyTorch tensors
         X_train_tensor = torch.tensor(X_train.values, dtype=torch.float32)
-        y_train_tensor = torch.tensor(y_train.values, dtype=torch.long)
+        y_train_tensor = torch.tensor(y_train, dtype=torch.long)
         # X_val_tensor = torch.tensor(X_val.values, dtype=torch.float32)
-        # y_val_tensor = torch.tensor(y_val.values, dtype=torch.long)
+        # y_val_tensor = torch.tensor(y_val, dtype=torch.long)
         X_test_tensor = torch.tensor(X_test.values, dtype=torch.float32)
-        y_test_tensor = torch.tensor(y_test.values, dtype=torch.long)
+        y_test_tensor = torch.tensor(y_test, dtype=torch.long)
         
         # Create TensorDatasets for each split
         train_dataset = TensorDataset(X_train_tensor, y_train_tensor)
@@ -120,9 +103,8 @@ class CovType:
         
         # Return the Datasets for training and test sets
         return train_dataset, test_dataset
-
-
     
+
     def compute_primary_frequency_mapping(self):
         """
         Computes the frequency of each category in the categorical features and assigns
@@ -159,7 +141,7 @@ class CovType:
             # Compute r_jl for each category using the provided formula
             for category, count in freq_counts.items():
                 r_value = (c_max_j - count) / (c_max_j - 1)
-                r_jl[category] = round(r_value, 4)  # Rounded to 4 decimal places for precision
+                r_jl[category] = round(r_value, 5)  # Rounded to 4 decimal places for precision
             
             # Store the mapping in the primary_mappings dictionary
             self.primary_mappings[col] = r_jl
@@ -188,6 +170,8 @@ class CovType:
         decimal precision in the primary mapping. This ensures that Delta r is one order
         of magnitude smaller than the smallest decimal precision in Delta r_min.
         """
+
+        self.largest_p = 0
         # Iterate over each categorical feature
         for col in self.cat_cols:
             r_jl_mapping = self.primary_mappings[col]
@@ -227,6 +211,10 @@ class CovType:
             
             # Set Delta r = 10^{-(p + 1)}
             delta_r = 10 ** (-(p + 1))
+
+            # Update the largest p value
+            if p > self.largest_p:
+                self.largest_p = p
             
             # Store Delta r in the delta_r_values dictionary
             self.delta_r_values[col] = delta_r
@@ -326,8 +314,8 @@ class CovType:
                         #     print(f"  Original Delta r = {delta_r}")
                         #     print(f"  Adjusted Delta r = {adjusted_delta_r}")
                             
-                        # Round r'_jl to 4 decimal places for consistency
-                        r_prime = round(r_prime, 4)
+                        # Round r'_jl to the largest p + 1 decimal places for consistency
+                        r_prime = round(r_prime, self.largest_p + 1)
                         
                         # Assign r'_jl to the category
                         hierarchical_mapping[category] = r_prime
@@ -446,11 +434,11 @@ class CovType:
         
         # Convert the data to PyTorch tensors
         X_train_tensor = torch.tensor(X_train.values, dtype=torch.float32)
-        y_train_tensor = torch.tensor(y_train.values, dtype=torch.long)
+        y_train_tensor = torch.tensor(y_train, dtype=torch.long)
         # X_val_tensor = torch.tensor(X_val.values, dtype=torch.float32)
-        # y_val_tensor = torch.tensor(y_val.values, dtype=torch.long)
+        # y_val_tensor = torch.tensor(y_val, dtype=torch.long)
         X_test_tensor = torch.tensor(X_test.values, dtype=torch.float32)
-        y_test_tensor = torch.tensor(y_test.values, dtype=torch.long)
+        y_test_tensor = torch.tensor(y_test, dtype=torch.long)
         
         # Create TensorDatasets for each split
         train_dataset = TensorDataset(X_train_tensor, y_train_tensor)
@@ -466,13 +454,13 @@ class CovType:
         return train_dataset, test_dataset
     
 
-    def save_mappings(self, directory='mappings/covtype'):
+    def save_mappings(self, directory='mappings/ACI'):
         """
         Saves the hierarchical mappings and lookup tables to pickle files within the specified directory.
         
         Args:
             directory (str or Path, optional): The directory where mapping files will be saved.
-                                               Defaults to 'mappings/covtype'.
+                                               Defaults to 'mappings/ACI'.
         """
         # Convert directory to Path object
         path = Path(directory)
@@ -494,13 +482,13 @@ class CovType:
         
         print(f"Hierarchical mappings and lookup tables have been saved to '{path.resolve()}'.")
 
-    def load_mappings(self, directory='mappings/covtype'):
+    def load_mappings(self, directory='mappings/ACI'):
         """
         Loads the hierarchical mappings and lookup tables from pickle files within the specified directory.
         
         Args:
             directory (str or Path, optional): The directory from where mapping files will be loaded.
-                                               Defaults to 'mappings/covtype'.
+                                               Defaults to 'mappings/ACI'.
         
         Raises:
             FileNotFoundError: If the mapping files are not found in the specified directory.
@@ -632,8 +620,8 @@ class CovType:
 
             # Revert each value using the lookup table
             for i, r_prime in enumerate(feature_values):
-                # Round r_prime to 4 decimal places to match the lookup table
-                r_prime_rounded = round(float(r_prime), 4)  # Ensure consistent rounding
+                # Round r_prime to the largest p + 1 decimal places to match the lookup table
+                r_prime_rounded = round(float(r_prime), self.largest_p + 1)  # Ensure consistent rounding
 
                 # Retrieve the original category using the lookup table
                 category = self.lookup_tables[col].get(r_prime_rounded, None)

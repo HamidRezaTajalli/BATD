@@ -62,8 +62,6 @@ class Attack:
         beta (float, optional): Hyperparameter for \( L_1 \) regularization. Defaults to 0.1.
         lambd (float, optional): Hyperparameter for \( L_2 \) regularization. Defaults to 0.1.
         """
-                
-
 
         # Initialize the dataset
         self.data_obj = data_obj
@@ -128,6 +126,15 @@ class Attack:
                 X_train=X_train, 
                 y_train=y_train
             )
+        elif self.model.model_name == "SAINT":
+            X_train, y_train = self.data_obj._get_dataset_data(dataset)
+            
+            self.model.fit(
+                X_tab=X_train, 
+                target=y_train
+            )
+        else:
+            raise ValueError(f"Model {self.model.model_name} not supported.")
     
     def test(self, dataset):
         """
@@ -136,7 +143,7 @@ class Attack:
         Returns:
         accuracy (float): Accuracy of the model on the test set.
         """
-        if self.model.model_name == "TabNet":
+        if self.model.model_name == "TabNet" or self.model.model_name == "SAINT":
             # Convert test data to the required format
             X_test, y_test = self.data_obj._get_dataset_data(dataset)
 
@@ -146,6 +153,8 @@ class Attack:
             # Calculate accuracy using NumPy
             accuracy = (preds == y_test).mean()
             print(f"Test Accuracy: {accuracy * 100:.2f}%")
+        else:
+            raise ValueError(f"Model {self.model.model_name} not supported.")
 
         return accuracy
     
