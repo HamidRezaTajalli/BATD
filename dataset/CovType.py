@@ -59,6 +59,8 @@ class CovType:
         self.feature_names = X.columns.tolist()
 
         self.column_idx = {col: idx for idx, col in enumerate(self.feature_names)}
+        self.cat_cols_idx = [self.column_idx[col] for col in self.cat_cols]
+        self.num_cols_idx = [self.column_idx[col] for col in self.num_cols]
         
         # Store original dataset for reference
         self.X_original = X.copy()
@@ -661,7 +663,7 @@ class CovType:
         return X_rounded_tensor
     
 
-    def Revert(self, converted_dataset: TensorDataset) -> TensorDataset:
+    def Revert(self, converted_dataset: TensorDataset, FTT=False) -> TensorDataset:
         """
         Reverts the converted numerical values back to their original categorical values.
 
@@ -712,5 +714,13 @@ class CovType:
         # Convert back to torch.Tensor
         X_reverted_tensor = torch.tensor(X_np, dtype=torch.float32)
 
+        # For using this reverted dataset on FTTransformer, we need to seperate the categorical features and numerical features
+        X_categorical = X_reverted_tensor[:, self.cat_cols_idx].to(torch.long)
+        X_numerical = X_reverted_tensor[:, self.num_cols_idx]
+
+
         # Return the reverted dataset as a TensorDataset
-        return TensorDataset(X_reverted_tensor, y_tensor)
+        if FTT:
+            return TensorDataset(X_categorical, X_numerical, y_tensor)
+        else:
+            return TensorDataset(X_reverted_tensor, y_tensor)

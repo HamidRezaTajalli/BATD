@@ -76,8 +76,8 @@ def main():
 
     logging.info("=== Testing Completed ===")
 
-    # # Get current Unix timestamp
-    # unix_timestamp = int(time.time())
+    # Get current Unix timestamp
+    unix_timestamp = int(time.time())
 
     # # Save the model with Unix timestamp in the filename
     # attack.model.save_model(f"./saved_models/clean/tabnet_{unix_timestamp}")
@@ -85,60 +85,65 @@ def main():
     
 
 
-    # # Step 6: Select non-target samples from the training dataset
-    # D_non_target = attack.select_non_target_samples()
+    # Step 6: Select non-target samples from the training dataset
+    D_non_target = attack.select_non_target_samples()
 
-    # # Step 7: Confidence-based sample ranking to create D_picked
-    # D_picked = attack.confidence_based_sample_ranking()
+    # Step 7: Confidence-based sample ranking to create D_picked
+    D_picked = attack.confidence_based_sample_ranking()
 
-    # # Step 8: Define the backdoor trigger
-    # attack.define_trigger()
+    # Step 8: Define the backdoor trigger
+    attack.define_trigger()
 
-    # # Step 9: optimize the trigger
-    # # attack.compute_mode() # compute the mode vector (if needed)
+    # Step 9: optimize the trigger
+    # attack.compute_mode() # compute the mode vector (if needed)
 
-    # attack.optimize_trigger()
+    attack.optimize_trigger()
 
     # # attack.load_trigger() # load the already optimized trigger (if needed)
 
 
-    # print(attack.delta)
+    print(attack.delta)
 
-    # print(attack.mode_vector)
+    print(attack.mode_vector)
 
-    # # Step 10: Construct the poisoned dataset
+    # Step 10: Construct the poisoned dataset
 
-    # poisoned_trainset, poisoned_train_samples = attack.construct_poisoned_dataset(attack.converted_dataset[0], epsilon=epsilon)
-    # poisoned_testset, poisoned_test_samples = attack.construct_poisoned_dataset(attack.converted_dataset[1], epsilon=1)
-    # attack.poisoned_dataset = (poisoned_trainset, poisoned_testset)
-    # attack.poisoned_samples = (poisoned_train_samples, poisoned_test_samples)
-
-
-    # # Save the poisoned dataset
-    # attack.save_poisoned_dataset()
-    # # load the poisoned dataset (uncomment if needed)
-    # # attack.load_poisoned_dataset()
+    poisoned_trainset, poisoned_train_samples = attack.construct_poisoned_dataset(attack.converted_dataset[0], epsilon=epsilon)
+    poisoned_testset, poisoned_test_samples = attack.construct_poisoned_dataset(attack.converted_dataset[1], epsilon=1)
+    attack.poisoned_dataset = (poisoned_trainset, poisoned_testset)
+    attack.poisoned_samples = (poisoned_train_samples, poisoned_test_samples)
 
 
-    # # Step 11: Revert the poisoned dataset to the original categorical features
-    # reverted_poisoned_trainset = attack.data_obj.Revert(attack.poisoned_dataset[0])
-    # reverted_poisoned_testset = attack.data_obj.Revert(attack.poisoned_dataset[1])
+    # Save the poisoned dataset
+    attack.save_poisoned_dataset()
+    # load the poisoned dataset (uncomment if needed)
+    # attack.load_poisoned_dataset()
 
-    # # get the clean train and test datasets
-    # clean_dataset = attack.data_obj.get_normal_datasets()
-    # clean_trainset = clean_dataset[0]
-    # clean_testset = clean_dataset[1]
 
-    # logging.info("=== Training the model on the poisoned training dataset ===")
-    # # Step 12: Train the model on the poisoned training dataset
-    # attack.train(reverted_poisoned_trainset)
-    # logging.info("=== Poisoned Training Completed ===")
+    # Step 11: Revert the poisoned dataset to the original categorical features
+    FTT = True if attack.model.model_name == "FTTransformer" else False
+    reverted_poisoned_trainset = attack.data_obj.Revert(attack.poisoned_dataset[0], FTT=FTT)
+    reverted_poisoned_testset = attack.data_obj.Revert(attack.poisoned_dataset[1], FTT=FTT)
+    reverted_poisoned_dataset = (reverted_poisoned_trainset, reverted_poisoned_testset)
 
-    # logging.info("=== Testing the model on the poisoned testing dataset and clean testing dataset ===")
-    # # Step 13: Test the model on the poisoned testing dataset and clean testing dataset
-    # attack.test(reverted_poisoned_testset)
-    # attack.test(clean_testset)
-    # logging.info("=== Testing Completed ===")
+    # get the clean train and test datasets
+    if FTT:
+        clean_dataset = attack.data_obj.get_normal_datasets_FTT()
+    else:
+        clean_dataset = attack.data_obj.get_normal_datasets()
+    clean_trainset = clean_dataset[0]
+    clean_testset = clean_dataset[1]
+
+    logging.info("=== Training the model on the poisoned training dataset ===")
+    # Step 12: Train the model on the poisoned training dataset
+    attack.train(reverted_poisoned_dataset, converted=False)
+    logging.info("=== Poisoned Training Completed ===")
+
+    logging.info("=== Testing the model on the poisoned testing dataset and clean testing dataset ===")
+    # Step 13: Test the model on the poisoned testing dataset and clean testing dataset
+    attack.test(reverted_poisoned_testset, converted=False)
+    attack.test(clean_testset, converted=False)
+    logging.info("=== Testing Completed ===")
 
     # # Save the poisoned model with Unix timestamp in the filename
     # attack.model.save_model(f"./saved_models/poisoned/tabnet_{unix_timestamp}")

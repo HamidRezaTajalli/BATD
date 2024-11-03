@@ -244,14 +244,8 @@ class Attack:
                 # Move data to the appropriate device
                 X_batch = X_batch.to(self.device)
                 
-                if self.model.model_name == "FTTransformer":
-                    X_c = torch.empty(X_batch.shape[0], 0, dtype=torch.long)
-                    X_c = X_c.to(self.device)
-                    # Forward pass through the model to get logits
-                    logits = self.model.forward(X_c, X_batch)
-                else:
-                    # Forward pass through the model to get logits
-                    logits = self.model.forward(X_batch)
+                # Forward pass through the model to get logits
+                logits = self.model.forward(X_batch)
                 
                 # Apply softmax to obtain probabilities
                 probabilities = torch.softmax(logits, dim=1)
@@ -471,12 +465,7 @@ class Attack:
                 X_hat = self.apply_trigger(X_batch)
                 
                 # Forward pass to get logits
-                if self.model.model_name == "FTTransformer":
-                    X_c = torch.empty(X_hat.shape[0], 0, dtype=torch.long)
-                    X_c = X_c.to(self.device)
-                    logits = self.model.forward(X_c, X_hat)
-                else:
-                    logits = self.model.forward(X_hat)
+                logits = self.model.forward(X_hat)
                 
                 # Apply softmax to get probabilities
                 probabilities = torch.softmax(logits, dim=1)

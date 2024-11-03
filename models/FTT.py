@@ -26,6 +26,8 @@ class FTTModel:
         self.model_name = "FTTransformer"
         self.data_obj = data_obj
         self.epochs = 65
+        self.device = None
+
 
 
 
@@ -71,6 +73,7 @@ class FTTModel:
             self.model_original.to(device)  # Set the device for the FTTransformer model    
         else:
             raise ValueError(f"Invalid model type: {model_type}. Please choose 'converted' or 'original'.")
+        self.device = device
 
     
 
@@ -186,7 +189,7 @@ class FTTModel:
                 outputs = self.model_original(X_c, X_n)
                 _, predicted = torch.max(outputs, 1)
                 all_preds.extend(predicted.cpu().numpy())
-                all_targets.extend(y_batch.numpy())
+                all_targets.extend(y_batch.cpu().numpy())
 
         print("Classification Report:")
         print(classification_report(all_targets, all_preds))
@@ -297,7 +300,7 @@ class FTTModel:
                 outputs = self.model_converted(X_c, X_n)
                 _, predicted = torch.max(outputs, 1)
                 all_preds.extend(predicted.cpu().numpy())
-                all_targets.extend(y_batch.numpy())
+                all_targets.extend(y_batch.cpu().numpy())
 
         print("Classification Report:")
         print(classification_report(all_targets, all_preds))
@@ -330,7 +333,7 @@ class FTTModel:
                 outputs = self.model_original(X_c, X_n)
                 _, predicted = torch.max(outputs, 1)
                 all_preds.extend(predicted.cpu().numpy())
-                all_targets.extend(y_batch.numpy())
+                all_targets.extend(y_batch.cpu().numpy())
 
         
         # Convert lists to NumPy arrays for element-wise comparison
@@ -364,7 +367,7 @@ class FTTModel:
                 outputs = self.model_converted(X_c, X_n)
                 _, predicted = torch.max(outputs, 1)
                 all_preds.extend(predicted.cpu().numpy())
-                all_targets.extend(y_batch.numpy())
+                all_targets.extend(y_batch.cpu().numpy())
 
         # Convert lists to NumPy arrays for element-wise comparison
         all_preds = np.array(all_preds)
@@ -386,6 +389,7 @@ class FTTModel:
         # Return logits for the input features
 
         X_c = torch.empty(X.shape[0], 0, dtype=torch.long)
+        X_c = X_c.to(self.device)
         X_n = X
 
         proba = self.model_converted(X_c, X_n)
@@ -445,3 +449,12 @@ class FTTModel:
 # tabnet_model.fit(X_train, y_train, X_valid=X_val, y_valid=y_val)
 # Get the trained model
 # model = tabnet_model.get_model()
+
+
+
+# if __name__ == "__main__":
+#     from CovType import CovType
+#     data_obj = CovType()
+#     model = FTTModel(data_obj)
+#     dataset = data_obj.get_normal_datasets_FTT()
+#     model.fit(dataset[0], dataset[1])
