@@ -4,8 +4,7 @@ import logging
 import time # Import time module for Unix timestamp
 from attack import Attack
 from dataset.CovType import CovType  # Importing the ConvertCovType class from CovType.py
-from models.SAINT import SAINTClassifier
-
+from models.FTT import FTTModel
 
 
 
@@ -53,7 +52,7 @@ def main():
     data_obj = CovType()
 
     # Step 2: Initialize the model. If needed (optional), the model can be loaded from a saved model. Then the model is not needed to be trained again.
-    model = SAINTClassifier(column_idx=data_obj.column_idx, objective='multi', pred_dim=data_obj.num_classes, data_obj=data_obj)
+    model = FTTModel(data_obj=data_obj)
     model.to(device)
 
     # load the trained model
@@ -66,7 +65,8 @@ def main():
     
 
     # Step 4: Train the model on the clean training dataset
-    attack.train(attack.converted_dataset[0])
+    
+    attack.train(attack.converted_dataset)
     logging.info("=== Initial Model Training Completed ===")
 
     logging.info("=== Testing the model on the clean testing dataset ===")

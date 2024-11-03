@@ -107,18 +107,19 @@ class Attack:
         logging.info(f"Attack initialized with target label: {self.target_label}")
         
     
-    def train(self, dataset):
+    def train(self, dataset, converted=True):
         """
         Trains the model on the training set.
 
         Returns:
         None
         """
+        train_dataset, val_dataset = dataset
 
         if self.model.model_name == "TabNet":
 
             # Convert training data to the required format
-            X_train, y_train = self.data_obj._get_dataset_data(dataset)
+            X_train, y_train = self.data_obj._get_dataset_data(train_dataset)
 
 
             # Train the model
@@ -127,23 +128,28 @@ class Attack:
                 y_train=y_train
             )
         elif self.model.model_name == "SAINT":
-            X_train, y_train = self.data_obj._get_dataset_data(dataset)
+            X_train, y_train = self.data_obj._get_dataset_data(train_dataset)
             
             self.model.fit(
                 X_tab=X_train, 
                 target=y_train
             )
+        elif self.model.model_name == "FTTransformer":
+            if converted:
+                self.model.fit_converted(train_dataset, val_dataset)
+            else:
+                self.model.fit(train_dataset, val_dataset)
         else:
             raise ValueError(f"Model {self.model.model_name} not supported.")
     
-    def test(self, dataset):
+    def test(self, dataset, converted=True):
         """
         Tests the trained model on the test set.
 
         Returns:
         accuracy (float): Accuracy of the model on the test set.
         """
-        if self.model.model_name == "TabNet" or self.model.model_name == "SAINT":
+        if self.model.model_name == "TabNet":
             # Convert test data to the required format
             X_test, y_test = self.data_obj._get_dataset_data(dataset)
 
@@ -152,6 +158,13 @@ class Attack:
 
             # Calculate accuracy using NumPy
             accuracy = (preds == y_test).mean()
+            print(f"Test Accuracy: {accuracy * 100:.2f}%")
+
+        elif self.model.model_name == "FTTransformer":
+            if converted:
+                accuracy = self.model.predict_converted(dataset)
+            else:
+                accuracy = self.model.predict(dataset)
             print(f"Test Accuracy: {accuracy * 100:.2f}%")
         else:
             raise ValueError(f"Model {self.model.model_name} not supported.")
@@ -231,8 +244,14 @@ class Attack:
                 # Move data to the appropriate device
                 X_batch = X_batch.to(self.device)
                 
-                # Forward pass through the model to get logits
-                logits = self.model.forward(X_batch)
+                if self.model.model_name == "FTTransformer":
+                    X_c = torch.empty(X_batch.shape[0], 0, dtype=torch.long)
+                    X_c = X_c.to(self.device)
+                    # Forward pass through the model to get logits
+                    logits = self.model.forward(X_c, X_batch)
+                else:
+                    # Forward pass through the model to get logits
+                    logits = self.model.forward(X_batch)
                 
                 # Apply softmax to obtain probabilities
                 probabilities = torch.softmax(logits, dim=1)
@@ -452,7 +471,12 @@ class Attack:
                 X_hat = self.apply_trigger(X_batch)
                 
                 # Forward pass to get logits
-                logits = self.model.forward(X_hat)
+                if self.model.model_name == "FTTransformer":
+                    X_c = torch.empty(X_hat.shape[0], 0, dtype=torch.long)
+                    X_c = X_c.to(self.device)
+                    logits = self.model.forward(X_c, X_hat)
+                else:
+                    logits = self.model.forward(X_hat)
                 
                 # Apply softmax to get probabilities
                 probabilities = torch.softmax(logits, dim=1)

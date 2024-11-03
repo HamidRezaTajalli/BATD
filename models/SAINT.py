@@ -51,7 +51,7 @@ class SAINTClassifier:
                             shared_embed=None, 
                             add_shared_embed=None, 
                             frac_shared_embed=None, 
-                            continuous_cols=self.data_obj.feature_names, 
+                            continuous_cols=None, 
                             cont_norm_layer=None, 
                             embed_continuous_method='standard', 
                             cont_embed_dropout=None, 

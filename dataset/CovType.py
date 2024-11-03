@@ -51,6 +51,9 @@ class CovType:
         X = data['data']  # Features
         y = data['target']  # Target (Forest cover type classification)
 
+        # Subtract 1 to make classes start at 0
+        y = y - 1
+
 
         # Retrieve the feature names from the dataset: in the same order as they appear in the dataset
         self.feature_names = X.columns.tolist()
@@ -66,6 +69,10 @@ class CovType:
         ordinal_encoder = OrdinalEncoder()
         self.X_encoded = X.copy()
         self.X_encoded.loc[:, self.cat_cols] = ordinal_encoder.fit_transform(X[self.cat_cols])
+
+
+        # For training the FTT model, I need to know the number of unique categories in each categorical feature as a tuple
+        self.FTT_n_categories = tuple(len(self.X_encoded[col].unique()) for col in self.cat_cols)
         
         # Apply StandardScaler to numerical features to standardize them
         scaler = StandardScaler()
@@ -84,7 +91,7 @@ class CovType:
         self.lookup_tables = {col: {} for col in self.cat_cols}
     
 
-    def get_normal_datasets(self, test_size=None, random_state=None, batch_size=None) -> Tuple[TensorDataset, TensorDataset]:
+    def get_normal_datasets(self, dataloader=False, batch_size=None, test_size=None, random_state=None):
 
         if test_size is None:
             test_size = self.test_size
@@ -119,7 +126,56 @@ class CovType:
         test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
         
         # Return the Datasets for training and test sets
-        return train_dataset, test_dataset
+        if dataloader:
+            return train_loader, test_loader
+        else:
+            return train_dataset, test_dataset
+        
+    
+    def get_normal_datasets_FTT(self, dataloader=False, batch_size=None, test_size=None, random_state=None):
+        """
+        Returns the datasets for training and testing the FTT model. This method is the same as previous method: get_normal_datasets, but with one difference:
+        before feeding the X_encoded to the train_test_split, we seperate the categorical and numerical features into two different frames called X_encoded_cat and X_encoded_num. then 
+        we feed all 3 of them to the train_test_split and the rest of the process is the same as the previous method.
+        """
+
+        if test_size is None:
+            test_size = self.test_size
+        if random_state is None:
+            random_state = self.random_state
+        if batch_size is None:
+            batch_size = self.batch_size
+
+        X_encoded_cat = self.X_encoded[self.cat_cols]
+        X_encoded_num = self.X_encoded[self.num_cols]
+
+        # Split the data into train and temporary sets (temporary set will be further split into validation and test)
+        X_train_cat, X_test_cat, X_train_num, X_test_num, y_train, y_test = train_test_split(X_encoded_cat, X_encoded_num, self.y, test_size=test_size, random_state=random_state, stratify=self.y)
+
+
+        # convert the data to PyTorch tensors
+        X_train_cat_tensor = torch.tensor(X_train_cat.values, dtype=torch.long)
+        X_test_cat_tensor = torch.tensor(X_test_cat.values, dtype=torch.long)
+        X_train_num_tensor = torch.tensor(X_train_num.values, dtype=torch.float32)
+        X_test_num_tensor = torch.tensor(X_test_num.values, dtype=torch.float32)
+        y_train_tensor = torch.tensor(y_train.values, dtype=torch.long)
+        y_test_tensor = torch.tensor(y_test.values, dtype=torch.long)
+
+        # Create TensorDatasets for each split
+        train_dataset = TensorDataset(X_train_cat_tensor, X_train_num_tensor, y_train_tensor)
+        test_dataset = TensorDataset(X_test_cat_tensor, X_test_num_tensor, y_test_tensor)
+
+        # Create DataLoader for each split
+        train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
+        test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
+
+        # Return the Datasets for training and test sets
+        if dataloader:
+            return train_loader, test_loader
+        else:
+            return train_dataset, test_dataset
+
+
 
 
     
@@ -421,7 +477,7 @@ class CovType:
         return self.converted_X_encoded
     
 
-    def get_converted_dataset(self, test_size=None, random_state=None, batch_size=None):
+    def get_converted_dataset(self, dataloader=False, test_size=None, random_state=None, batch_size=None):
         """
         Returns the converted dataset with unique numerical representations for categorical features.
         
@@ -457,13 +513,18 @@ class CovType:
         # val_dataset = TensorDataset(X_val_tensor, y_val_tensor)
         test_dataset = TensorDataset(X_test_tensor, y_test_tensor)
         
+
         # Create DataLoader for each split
         train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
         # val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
         test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
         
         # Return the Datasets for training and test sets
-        return train_dataset, test_dataset
+        if dataloader:
+            return train_loader, test_loader
+        else:
+            return train_dataset, test_dataset
+
     
 
     def save_mappings(self, directory='mappings/covtype'):
