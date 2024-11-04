@@ -407,7 +407,7 @@ class Attack:
     
 
 
-    def optimize_trigger(self, num_epochs=200, learning_rate=0.0001, batch_size=64, verbose=True):
+    def optimize_trigger(self, num_epochs=1, learning_rate=0.0001, batch_size=64, verbose=True):
         """
         Optimizes the universal trigger pattern \( \delta \) by minimizing the loss function over D_picked.
 

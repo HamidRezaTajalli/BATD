@@ -37,6 +37,8 @@ class ACI:
         self.feature_names = X.columns.tolist()
 
         self.column_idx = {col: idx for idx, col in enumerate(self.feature_names)}
+        self.cat_cols_idx = [self.column_idx[col] for col in self.cat_cols]
+        self.num_cols_idx = [self.column_idx[col] for col in self.num_cols]
 
         # Store original dataset for reference
         self.X_original = X.copy()
@@ -49,6 +51,10 @@ class ACI:
         ordinal_encoder = OrdinalEncoder()
         self.X_encoded = X.copy()
         self.X_encoded.loc[:, self.cat_cols] = ordinal_encoder.fit_transform(X[self.cat_cols])
+
+
+        # For training the FTT model, I need to know the number of unique categories in each categorical feature as a tuple
+        self.FTT_n_categories = tuple(len(self.X_encoded[col].unique()) for col in self.cat_cols)
         
         # Apply StandardScaler to numerical features to standardize them
         scaler = StandardScaler()
@@ -67,7 +73,7 @@ class ACI:
         self.lookup_tables = {col: {} for col in self.cat_cols}
 
 
-    def get_normal_datasets(self, test_size=None, random_state=None, batch_size=None) -> Tuple[TensorDataset, TensorDataset]:
+    def get_normal_datasets(self, dataloader=False, batch_size=None, test_size=None, random_state=None):
 
         if test_size is None:
             test_size = self.test_size
@@ -102,8 +108,59 @@ class ACI:
         test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
         
         # Return the Datasets for training and test sets
-        return train_dataset, test_dataset
+        if dataloader:
+            return train_loader, test_loader
+        else:
+            return train_dataset, test_dataset
+
+
+
     
+    def get_normal_datasets_FTT(self, dataloader=False, batch_size=None, test_size=None, random_state=None):
+        """
+        Returns the datasets for training and testing the FTT model. This method is the same as previous method: get_normal_datasets, but with one difference:
+        before feeding the X_encoded to the train_test_split, we seperate the categorical and numerical features into two different frames called X_encoded_cat and X_encoded_num. then 
+        we feed all 3 of them to the train_test_split and the rest of the process is the same as the previous method.
+        """
+
+        if test_size is None:
+            test_size = self.test_size
+        if random_state is None:
+            random_state = self.random_state
+        if batch_size is None:
+            batch_size = self.batch_size
+
+        X_encoded_cat = self.X_encoded[self.cat_cols]
+        X_encoded_num = self.X_encoded[self.num_cols]
+
+        # Split the data into train and temporary sets (temporary set will be further split into validation and test)
+        X_train_cat, X_test_cat, X_train_num, X_test_num, y_train, y_test = train_test_split(X_encoded_cat, X_encoded_num, self.y, test_size=test_size, random_state=random_state, stratify=self.y)
+
+
+        # convert the data to PyTorch tensors
+        X_train_cat_tensor = torch.tensor(X_train_cat.values, dtype=torch.long)
+        X_test_cat_tensor = torch.tensor(X_test_cat.values, dtype=torch.long)
+        X_train_num_tensor = torch.tensor(X_train_num.values, dtype=torch.float32)
+        X_test_num_tensor = torch.tensor(X_test_num.values, dtype=torch.float32)
+        y_train_tensor = torch.tensor(y_train, dtype=torch.long)
+        y_test_tensor = torch.tensor(y_test, dtype=torch.long)
+
+        # Create TensorDatasets for each split
+        train_dataset = TensorDataset(X_train_cat_tensor, X_train_num_tensor, y_train_tensor)
+        test_dataset = TensorDataset(X_test_cat_tensor, X_test_num_tensor, y_test_tensor)
+
+        # Create DataLoader for each split
+        train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
+        test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
+
+        # Return the Datasets for training and test sets
+        if dataloader:
+            return train_loader, test_loader
+        else:
+            return train_dataset, test_dataset
+
+
+
 
     def compute_primary_frequency_mapping(self):
         """
@@ -141,7 +198,7 @@ class ACI:
             # Compute r_jl for each category using the provided formula
             for category, count in freq_counts.items():
                 r_value = (c_max_j - count) / (c_max_j - 1)
-                r_jl[category] = round(r_value, 5)  # Rounded to 4 decimal places for precision
+                r_jl[category] = round(r_value, 5)  # Rounded to 5 decimal places for precision
             
             # Store the mapping in the primary_mappings dictionary
             self.primary_mappings[col] = r_jl
@@ -275,7 +332,7 @@ class ACI:
                 if len(categories) == 1:
                     # No tie, assign r'_jl = r_jl
                     category = categories[0]
-                    hierarchical_mapping[category] = r_value
+                    hierarchical_mapping[category] = round(float(r_value), self.largest_p + 1)
                 else:
                     # Tie detected, need to resolve
                     tied_categories = categories.copy()
@@ -409,7 +466,7 @@ class ACI:
         return self.converted_X_encoded
     
 
-    def get_converted_dataset(self, test_size=None, random_state=None, batch_size=None):
+    def get_converted_dataset(self, dataloader=False, test_size=None, random_state=None, batch_size=None):
         """
         Returns the converted dataset with unique numerical representations for categorical features.
         
@@ -451,7 +508,10 @@ class ACI:
         test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
         
         # Return the Datasets for training and test sets
-        return train_dataset, test_dataset
+        if dataloader:
+            return train_loader, test_loader
+        else:
+            return train_dataset, test_dataset
     
 
     def save_mappings(self, directory='mappings/ACI'):
@@ -588,7 +648,7 @@ class ACI:
         return X_rounded_tensor
     
 
-    def Revert(self, converted_dataset: TensorDataset) -> TensorDataset:
+    def Revert(self, converted_dataset: TensorDataset, FTT=False) -> TensorDataset:
         """
         Reverts the converted numerical values back to their original categorical values.
 
@@ -597,7 +657,7 @@ class ACI:
 
         Returns:
             TensorDataset: The dataset with original categorical features restored.
-
+        
         Raises:
             ValueError: If a numerical value does not have a corresponding key in the lookup table.
         """
@@ -640,4 +700,12 @@ class ACI:
         X_reverted_tensor = torch.tensor(X_np, dtype=torch.float32)
 
         # Return the reverted dataset as a TensorDataset
-        return TensorDataset(X_reverted_tensor, y_tensor)
+
+        if FTT:
+            # For using this reverted dataset on FTTransformer, we need to seperate the categorical features and numerical features
+            X_categorical = X_reverted_tensor[:, self.cat_cols_idx].to(torch.long)
+            X_numerical = X_reverted_tensor[:, self.num_cols_idx]
+            return TensorDataset(X_categorical, X_numerical, y_tensor)      
+        else:
+            
+            return TensorDataset(X_reverted_tensor, y_tensor)

@@ -108,7 +108,10 @@ class FTTModel:
 
         device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         self.to(device, model_type="original")
-        criterion = nn.CrossEntropyLoss()
+        if self.data_obj.num_classes == 2:
+            criterion = nn.BCEWithLogitsLoss()
+        else:
+            criterion = nn.CrossEntropyLoss()
         optimizer = torch.optim.AdamW(self.model_original.parameters(), lr=3.762989816330166e-05, weight_decay=0.0001239780004929955)
 
         # 11. Training loop with Early Stopping
@@ -125,7 +128,9 @@ class FTTModel:
             
             for X_c, X_n, y_batch in train_loader:
                 X_c, X_n, y_batch = X_c.to(device), X_n.to(device), y_batch.to(device)
-                
+                if self.data_obj.num_classes == 2:
+                    y_batch = y_batch.float().unsqueeze(1)
+
                 optimizer.zero_grad()
                 outputs = self.model_original(X_c, X_n)
                 loss = criterion(outputs, y_batch)
@@ -134,7 +139,12 @@ class FTTModel:
                 
                 total_loss += loss.item() * X_c.size(0)
                 
-                _, predicted = torch.max(outputs, 1)
+                if self.data_obj.num_classes == 2:
+                    predicted = torch.sigmoid(outputs)
+                    predicted = (predicted > 0.5).float()
+                else: 
+                    _, predicted = torch.max(outputs, 1)
+
                 correct += (predicted == y_batch).sum().item()
                 total += y_batch.size(0)
             
@@ -150,11 +160,20 @@ class FTTModel:
             with torch.no_grad():
                 for X_c, X_n, y_batch in val_loader:
                     X_c, X_n, y_batch = X_c.to(device), X_n.to(device), y_batch.to(device)
+                    if self.data_obj.num_classes == 2:
+                        y_batch = y_batch.float().unsqueeze(1)
                     outputs = self.model_original(X_c, X_n)
                     loss = criterion(outputs, y_batch)
                     val_loss += loss.item() * X_c.size(0)
-                    
-                    _, predicted = torch.max(outputs, 1)
+
+
+                    if self.data_obj.num_classes == 2:
+                        predicted = torch.sigmoid(outputs)
+                        predicted = (predicted > 0.5).float()
+                    else: 
+                        _, predicted = torch.max(outputs, 1)
+
+
                     correct_val += (predicted == y_batch).sum().item()
                     total_val += y_batch.size(0)
             
@@ -186,8 +205,16 @@ class FTTModel:
         with torch.no_grad():
             for X_c, X_n, y_batch in val_loader:
                 X_c, X_n = X_c.to(device), X_n.to(device)
+                if self.data_obj.num_classes == 2:
+                    y_batch = y_batch.float().unsqueeze(1)
                 outputs = self.model_original(X_c, X_n)
-                _, predicted = torch.max(outputs, 1)
+
+                if self.data_obj.num_classes == 2:
+                    predicted = torch.sigmoid(outputs)
+                    predicted = (predicted > 0.5).float()
+                else: 
+                    _, predicted = torch.max(outputs, 1)
+
                 all_preds.extend(predicted.cpu().numpy())
                 all_targets.extend(y_batch.cpu().numpy())
 
@@ -216,7 +243,10 @@ class FTTModel:
 
         device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         self.to(device, model_type="converted")
-        criterion = nn.CrossEntropyLoss()
+        if self.data_obj.num_classes == 2:
+            criterion = nn.BCEWithLogitsLoss()
+        else:
+            criterion = nn.CrossEntropyLoss()
         optimizer = torch.optim.AdamW(self.model_converted.parameters(), lr=3.762989816330166e-05, weight_decay=0.0001239780004929955)
 
         # 11. Training loop with Early Stopping
@@ -234,7 +264,10 @@ class FTTModel:
             for X_n, y_batch in train_loader:
                 X_c = torch.empty(X_n.shape[0], 0, dtype=torch.long)
                 X_c, X_n, y_batch = X_c.to(device), X_n.to(device), y_batch.to(device)
-                
+
+                if self.data_obj.num_classes == 2:
+                    y_batch = y_batch.float().unsqueeze(1)
+               
                 optimizer.zero_grad()
                 outputs = self.model_converted(X_c, X_n)
                 loss = criterion(outputs, y_batch)
@@ -243,7 +276,12 @@ class FTTModel:
                 
                 total_loss += loss.item() * X_c.size(0)
                 
-                _, predicted = torch.max(outputs, 1)
+                if self.data_obj.num_classes == 2:
+                    predicted = torch.sigmoid(outputs)
+                    predicted = (predicted > 0.5).float()
+                else: 
+                    _, predicted = torch.max(outputs, 1)
+
                 correct += (predicted == y_batch).sum().item()
                 total += y_batch.size(0)
             
@@ -260,11 +298,18 @@ class FTTModel:
                 for X_n, y_batch in val_loader:
                     X_c = torch.empty(X_n.shape[0], 0, dtype=torch.long)
                     X_c, X_n, y_batch = X_c.to(device), X_n.to(device), y_batch.to(device)
+                    if self.data_obj.num_classes == 2:
+                        y_batch = y_batch.float().unsqueeze(1)
                     outputs = self.model_converted(X_c, X_n)
                     loss = criterion(outputs, y_batch)
                     val_loss += loss.item() * X_c.size(0)
                     
-                    _, predicted = torch.max(outputs, 1)
+                    if self.data_obj.num_classes == 2:
+                        predicted = torch.sigmoid(outputs)
+                        predicted = (predicted > 0.5).float()
+                    else: 
+                        _, predicted = torch.max(outputs, 1)
+
                     correct_val += (predicted == y_batch).sum().item()
                     total_val += y_batch.size(0)
             
@@ -297,8 +342,16 @@ class FTTModel:
             for X_n, y_batch in val_loader:
                 X_c = torch.empty(X_n.shape[0], 0, dtype=torch.long)
                 X_c, X_n = X_c.to(device), X_n.to(device)
+                if self.data_obj.num_classes == 2:
+                    y_batch = y_batch.float().unsqueeze(1)
                 outputs = self.model_converted(X_c, X_n)
-                _, predicted = torch.max(outputs, 1)
+
+                if self.data_obj.num_classes == 2:
+                    predicted = torch.sigmoid(outputs)
+                    predicted = (predicted > 0.5).float()
+                else: 
+                    _, predicted = torch.max(outputs, 1)
+
                 all_preds.extend(predicted.cpu().numpy())
                 all_targets.extend(y_batch.cpu().numpy())
 
@@ -330,8 +383,16 @@ class FTTModel:
         with torch.no_grad():
             for X_c, X_n, y_batch in val_loader:
                 X_c, X_n = X_c.to(device), X_n.to(device)
+                if self.data_obj.num_classes == 2:
+                    y_batch = y_batch.float().unsqueeze(1)
                 outputs = self.model_original(X_c, X_n)
-                _, predicted = torch.max(outputs, 1)
+
+                if self.data_obj.num_classes == 2:
+                    predicted = torch.sigmoid(outputs)
+                    predicted = (predicted > 0.5).float()
+                else: 
+                    _, predicted = torch.max(outputs, 1)
+
                 all_preds.extend(predicted.cpu().numpy())
                 all_targets.extend(y_batch.cpu().numpy())
 
@@ -364,8 +425,18 @@ class FTTModel:
             for X_n, y_batch in val_loader:
                 X_c = torch.empty(X_n.shape[0], 0, dtype=torch.long)
                 X_c, X_n = X_c.to(device), X_n.to(device)
+
+                if self.data_obj.num_classes == 2:
+                    y_batch = y_batch.float().unsqueeze(1)
+
                 outputs = self.model_converted(X_c, X_n)
-                _, predicted = torch.max(outputs, 1)
+
+                if self.data_obj.num_classes == 2:
+                    predicted = torch.sigmoid(outputs)
+                    predicted = (predicted > 0.5).float()
+                else: 
+                    _, predicted = torch.max(outputs, 1)
+
                 all_preds.extend(predicted.cpu().numpy())
                 all_targets.extend(y_batch.cpu().numpy())
 

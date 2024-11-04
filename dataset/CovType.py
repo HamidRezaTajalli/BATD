@@ -246,6 +246,9 @@ class CovType:
         decimal precision in the primary mapping. This ensures that Delta r is one order
         of magnitude smaller than the smallest decimal precision in Delta r_min.
         """
+
+
+        self.largest_p = 0
         # Iterate over each categorical feature
         for col in self.cat_cols:
             r_jl_mapping = self.primary_mappings[col]
@@ -285,6 +288,10 @@ class CovType:
             
             # Set Delta r = 10^{-(p + 1)}
             delta_r = 10 ** (-(p + 1))
+
+            # Update the largest p value if the current p is greater than the previous largest p
+            if p > self.largest_p:
+                self.largest_p = p
             
             # Store Delta r in the delta_r_values dictionary
             self.delta_r_values[col] = delta_r
@@ -345,7 +352,7 @@ class CovType:
                 if len(categories) == 1:
                     # No tie, assign r'_jl = r_jl
                     category = categories[0]
-                    hierarchical_mapping[category] = r_value
+                    hierarchical_mapping[category] = round(float(r_value), self.largest_p + 1)
                 else:
                     # Tie detected, need to resolve
                     tied_categories = categories.copy()
@@ -384,15 +391,15 @@ class CovType:
                         #     print(f"  Original Delta r = {delta_r}")
                         #     print(f"  Adjusted Delta r = {adjusted_delta_r}")
                             
-                        # Round r'_jl to 4 decimal places for consistency
-                        r_prime = round(r_prime, 4)
+                        # Round r'_jl to the largest p + 1 decimal places for consistency
+                        r_prime = round(float(r_prime), self.largest_p + 1)
                         
                         # Assign r'_jl to the category
                         hierarchical_mapping[category] = r_prime
                         
             # Store the hierarchical mapping
             self.hierarchical_mappings[col] = hierarchical_mapping
-            
+
             # Build the lookup table for reverse mapping
             for category, r_prime in hierarchical_mapping.items():
                 # Ensure the category values and r_prime values are stored correctly
@@ -695,8 +702,8 @@ class CovType:
 
             # Revert each value using the lookup table
             for i, r_prime in enumerate(feature_values):
-                # Round r_prime to 4 decimal places to match the lookup table
-                r_prime_rounded = round(float(r_prime), 4)  # Ensure consistent rounding
+                # Round r_prime to the largest p + 1 decimal places to match the lookup table
+                r_prime_rounded = round(float(r_prime), self.largest_p + 1)  # Ensure consistent rounding
 
                 # Retrieve the original category using the lookup table
                 category = self.lookup_tables[col].get(r_prime_rounded, None)
@@ -714,13 +721,13 @@ class CovType:
         # Convert back to torch.Tensor
         X_reverted_tensor = torch.tensor(X_np, dtype=torch.float32)
 
-        # For using this reverted dataset on FTTransformer, we need to seperate the categorical features and numerical features
-        X_categorical = X_reverted_tensor[:, self.cat_cols_idx].to(torch.long)
-        X_numerical = X_reverted_tensor[:, self.num_cols_idx]
-
-
         # Return the reverted dataset as a TensorDataset
+
         if FTT:
-            return TensorDataset(X_categorical, X_numerical, y_tensor)
+            # For using this reverted dataset on FTTransformer, we need to seperate the categorical features and numerical features
+            X_categorical = X_reverted_tensor[:, self.cat_cols_idx].to(torch.long)
+            X_numerical = X_reverted_tensor[:, self.num_cols_idx]
+            return TensorDataset(X_categorical, X_numerical, y_tensor)      
         else:
+            
             return TensorDataset(X_reverted_tensor, y_tensor)
