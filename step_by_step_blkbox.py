@@ -5,6 +5,7 @@ import time # Import time module for Unix timestamp
 from attack import Attack
 from dataset.CovType import CovType  # Importing the ConvertCovType class from CovType.py
 from models.FTT import FTTModel
+from models.XGBoost import XGBoostModel
 from models.Tabnet import TabNetModel
 from dataset.ACI import ACI
 
@@ -54,18 +55,18 @@ def main():
     data_obj = ACI()
 
     # Step 2: Initialize the model. If needed (optional), the model can be loaded from a saved model. Then the model is not needed to be trained again.
-    model = FTTModel(data_obj=data_obj)
+    # model = FTTModel(data_obj=data_obj)
 
-    # model = TabNetModel(
-    #         n_d=64,
-    #         n_a=64,
-    #         n_steps=5,
-    #         gamma=1.5,
-    #         n_independent=2,
-    #         n_shared=2,
-    #         momentum=0.3,
-    #         mask_type='entmax'
-    #     )
+    model = TabNetModel(
+            n_d=64,
+            n_a=64,
+            n_steps=5,
+            gamma=1.5,
+            n_independent=2,
+            n_shared=2,
+            momentum=0.3,
+            mask_type='entmax'
+        )
 
     model.to(device)
 
@@ -132,6 +133,12 @@ def main():
     attack.save_poisoned_dataset()
     # load the poisoned dataset (uncomment if needed)
     # attack.load_poisoned_dataset()
+
+    # Step 11: Define the black box model
+    objective = "multi" if attack.data_obj.num_classes > 2 else "binary"
+    black_box_model = XGBoostModel(objective=objective)
+    black_box_model.to(device)
+    attack.model = black_box_model
 
 
     # Step 11: Revert the poisoned dataset to the original categorical features

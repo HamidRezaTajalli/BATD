@@ -7,7 +7,7 @@ import xgboost as xgb
 
 n_estimators = 1000 if not os.getenv("CI", False) else 20
 
-class XGBClassifier:
+class XGBoostModel:
     def __init__(self, 
         objective="multi",
         max_depth=8,
@@ -58,7 +58,7 @@ class XGBClassifier:
         random_state (int): Random seed for reproducibility.
         seed (int): Random seed for reproducibility.
         """
-
+        self.model_name = "XGBoost"
         self.max_depth = max_depth
         self.learning_rate = learning_rate
         self.n_estimators = n_estimators
@@ -124,7 +124,7 @@ class XGBClassifier:
         Parameters:
         device (torch.device): The device to move the model to.
         """
-        self.model.device = 'cuda' if device.type == 'cuda' else 'cpu'  # Set the device for the TabNet model
+        pass
 
     
 
@@ -133,37 +133,42 @@ class XGBClassifier:
         Returns the initialized TabNet model for use in training or evaluation.
         
         Returns:
-        model (TabNetClassifier): The TabNet classifier instance.
+        model (XGBClassifier): The XGBoost classifier instance.
         """
         return self.model
 
-    def fit(self, X_train, y_train, X_valid=None, y_valid=None, early_stopping_rounds=40, verbose=10):
+    def fit(self, X_train, y_train, X_valid=None, y_valid=None, early_stopping=40, verbose=10):
         """
-        Trains the TabNet model using the provided training data.
+        Trains the XGBoost model using the provided training data.
         
         Parameters:
         X_train (array-like): Input features for training.
         y_train (array-like): Labels for training.
         X_valid (array-like): Input features for validation (optional).
         y_valid (array-like): Labels for validation (optional).
-        early_stopping_rounds (int): Number of rounds with no improvement before stopping training early.
+        early_stopping (int): Number of rounds with no improvement before stopping training early.
         verbose (int): Verbosity level for training.
         
         Returns:
         None
         """
+        # Prepare the evaluation set
+        eval_set = [(X_train, y_train)]  # Include training set in eval_set
+        if X_valid is not None and y_valid is not None:
+            eval_set.append((X_valid, y_valid))
+        
         # Train the model
         self.model.fit(
-            X_train=X_train, y_train=y_train,
-            eval_set=[(X_train, y_train), (X_valid, y_valid)] if X_valid is not None and y_valid is not None else None,
-            early_stopping_rounds=early_stopping_rounds,
+            X_train, 
+            y_train,
+            eval_set=eval_set,
             verbose=verbose
         )
     
     
     def predict(self, X_test):
         """
-        Makes predictions on the provided test data using the trained TabNet model.
+        Makes predictions on the provided test data using the trained XGBoost model.
         
         Parameters:
         X_test (array-like): Input features for testing.
@@ -176,13 +181,14 @@ class XGBClassifier:
     def forward(self, X: torch.Tensor) -> torch.Tensor:
         # Return logits for the input features
         # Convert numpy array to PyTorch tensor
+   
         proba = self.model.predict_proba(X)
         return torch.tensor(proba)
     
 
     def save_model(self, filepath):
         """
-        Saves the trained TabNet model to the specified file path.
+        Saves the trained XGBoost model to the specified file path.
         
         Parameters:
         filepath (str): File path to save the model.
@@ -194,7 +200,7 @@ class XGBClassifier:
     
     def load_model(self, filepath):
         """
-        Loads a pre-trained TabNet model from the specified file path.
+        Loads a pre-trained XGBoost model from the specified file path.
         
         Parameters:
         filepath (str): File path to load the model from.
@@ -221,3 +227,20 @@ class XGBClassifier:
 # tabnet_model.fit(X_train, y_train, X_valid=X_val, y_valid=y_val)
 # Get the trained model
 # model = tabnet_model.get_model()
+
+
+# if __name__ == "__main__":
+#     xgb_model = XGBoostModel(objective="multi")
+#     print(xgb.__version__)
+#     from CovType import CovType
+#     data_obj = CovType()
+#     train_dataset, test_dataset = data_obj.get_normal_datasets()
+#     X_train, y_train = data_obj._get_dataset_data(train_dataset)
+#     xgb_model.fit(X_train, y_train)
+#     X_test, y_test = data_obj._get_dataset_data(test_dataset)
+#     preds = xgb_model.predict(X_test)
+#     accuracy = (preds == y_test).mean()
+#     print(f"Accuracy: {accuracy * 100:.2f}%")
+
+
+

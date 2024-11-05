@@ -116,7 +116,7 @@ class Attack:
         """
         train_dataset, val_dataset = dataset
 
-        if self.model.model_name == "TabNet":
+        if self.model.model_name == "TabNet" or self.model.model_name == "XGBoost":
 
             # Convert training data to the required format
             X_train, y_train = self.data_obj._get_dataset_data(train_dataset)
@@ -149,7 +149,7 @@ class Attack:
         Returns:
         accuracy (float): Accuracy of the model on the test set.
         """
-        if self.model.model_name == "TabNet":
+        if self.model.model_name == "TabNet" or self.model.model_name == "XGBoost":
             # Convert test data to the required format
             X_test, y_test = self.data_obj._get_dataset_data(dataset)
 

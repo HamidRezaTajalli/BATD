@@ -4,8 +4,9 @@ import logging
 import time # Import time module for Unix timestamp
 from attack import Attack
 from dataset.CovType import CovType  # Importing the ConvertCovType class from CovType.py
-from models.Tabnet import TabNetModel  # Importing the TabNet model from TabNet.py
-
+from models.FTT import FTTModel
+from models.Tabnet import TabNetModel
+from dataset.ACI import ACI
 
 
 
@@ -50,20 +51,22 @@ def main():
     epsilon = 0.02
     
     # Step 1: Initialize the dataset object which can handle, convert and revert the dataset.
-    data_obj = CovType()
+    data_obj = ACI()
 
     # Step 2: Initialize the model. If needed (optional), the model can be loaded from a saved model. Then the model is not needed to be trained again.
-    model = TabNetModel(
-            n_d=64,
-            n_a=64,
-            n_steps=5,
-            gamma=1.5,
-            n_independent=2,
-            n_shared=2,
-            momentum=0.3,
-            mask_type='entmax'
-        )
-        
+    model = FTTModel(data_obj=data_obj)
+
+    # model = TabNetModel(
+    #         n_d=64,
+    #         n_a=64,
+    #         n_steps=5,
+    #         gamma=1.5,
+    #         n_independent=2,
+    #         n_shared=2,
+    #         momentum=0.3,
+    #         mask_type='entmax'
+    #     )
+
     model.to(device)
 
     # load the trained model
@@ -76,7 +79,8 @@ def main():
     
 
     # Step 4: Train the model on the clean training dataset
-    attack.train(attack.converted_dataset[0])
+    
+    attack.train(attack.converted_dataset)
     logging.info("=== Initial Model Training Completed ===")
 
     logging.info("=== Testing the model on the clean testing dataset ===")
@@ -89,8 +93,8 @@ def main():
     # Get current Unix timestamp
     unix_timestamp = int(time.time())
 
-    # Save the model with Unix timestamp in the filename
-    attack.model.save_model(f"./saved_models/clean/tabnet_{unix_timestamp}")
+    # # Save the model with Unix timestamp in the filename
+    # attack.model.save_model(f"./saved_models/clean/tabnet_{unix_timestamp}")
     
     
 
@@ -109,7 +113,7 @@ def main():
 
     attack.optimize_trigger()
 
-    # attack.load_trigger() # load the already optimized trigger (if needed)
+    # # attack.load_trigger() # load the already optimized trigger (if needed)
 
 
     print(attack.delta)
@@ -131,27 +135,32 @@ def main():
 
 
     # Step 11: Revert the poisoned dataset to the original categorical features
-    reverted_poisoned_trainset = attack.data_obj.Revert(attack.poisoned_dataset[0])
-    reverted_poisoned_testset = attack.data_obj.Revert(attack.poisoned_dataset[1])
+    FTT = True if attack.model.model_name == "FTTransformer" else False
+    reverted_poisoned_trainset = attack.data_obj.Revert(attack.poisoned_dataset[0], FTT=FTT)
+    reverted_poisoned_testset = attack.data_obj.Revert(attack.poisoned_dataset[1], FTT=FTT)
+    reverted_poisoned_dataset = (reverted_poisoned_trainset, reverted_poisoned_testset)
 
     # get the clean train and test datasets
-    clean_dataset = attack.data_obj.get_normal_datasets()
+    if FTT:
+        clean_dataset = attack.data_obj.get_normal_datasets_FTT()
+    else:
+        clean_dataset = attack.data_obj.get_normal_datasets()
     clean_trainset = clean_dataset[0]
     clean_testset = clean_dataset[1]
 
     logging.info("=== Training the model on the poisoned training dataset ===")
     # Step 12: Train the model on the poisoned training dataset
-    attack.train(reverted_poisoned_trainset)
+    attack.train(reverted_poisoned_dataset, converted=False)
     logging.info("=== Poisoned Training Completed ===")
 
     logging.info("=== Testing the model on the poisoned testing dataset and clean testing dataset ===")
     # Step 13: Test the model on the poisoned testing dataset and clean testing dataset
-    attack.test(reverted_poisoned_testset)
-    attack.test(clean_testset)
+    attack.test(reverted_poisoned_testset, converted=False)
+    attack.test(clean_testset, converted=False)
     logging.info("=== Testing Completed ===")
 
-    # Save the poisoned model with Unix timestamp in the filename
-    attack.model.save_model(f"./saved_models/poisoned/tabnet_{unix_timestamp}")
+    # # Save the poisoned model with Unix timestamp in the filename
+    # attack.model.save_model(f"./saved_models/poisoned/tabnet_{unix_timestamp}")
 
 
 
