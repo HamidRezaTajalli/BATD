@@ -65,7 +65,7 @@ class Attack:
 
         # Initialize the dataset
         self.data_obj = data_obj
-        self.converted_dataset = self.data_obj.get_converted_dataset()
+        self.converted_dataset = self.data_obj.get_normal_datasets() if not self.data_obj.cat_cols else self.data_obj.get_converted_dataset() 
 
         # Device
         self.device = device
@@ -142,7 +142,7 @@ class Attack:
         else:
             raise ValueError(f"Model {self.model.model_name} not supported.")
     
-    def test(self, dataset, converted=True):
+    def test(self, testset, converted=True):
         """
         Tests the trained model on the test set.
 
@@ -151,7 +151,7 @@ class Attack:
         """
         if self.model.model_name == "TabNet" or self.model.model_name == "XGBoost":
             # Convert test data to the required format
-            X_test, y_test = self.data_obj._get_dataset_data(dataset)
+            X_test, y_test = self.data_obj._get_dataset_data(testset)
 
             # Make predictions on the test data
             preds = self.model.predict(X_test)
@@ -162,9 +162,9 @@ class Attack:
 
         elif self.model.model_name == "FTTransformer":
             if converted:
-                accuracy = self.model.predict_converted(dataset)
+                accuracy = self.model.predict_converted(testset)
             else:
-                accuracy = self.model.predict(dataset)
+                accuracy = self.model.predict(testset)
             print(f"Test Accuracy: {accuracy * 100:.2f}%")
         else:
             raise ValueError(f"Model {self.model.model_name} not supported.")
@@ -623,7 +623,10 @@ class Attack:
         X_poisoned = self.apply_trigger(X_selected)
 
         # Round the r_jl values of the poisoned samples
-        X_poisoned = self.data_obj.round_rjl(X_poisoned)
+        if self.data_obj.cat_cols:
+            X_poisoned = self.data_obj.round_rjl(X_poisoned)
+        else:
+            X_poisoned = X_poisoned.clone().detach().cpu()
         
         # Relabel the poisoned samples to the target class
         y_poisoned = torch.full((N_poison,), self.target_label, dtype=torch.long).to(self.device)
@@ -657,24 +660,24 @@ class Attack:
 
         #####################################
         # Select a subset of poisoned samples to display
-        num_samples_to_show = min(5, N_poison)  # Show up to 5 samples or the total number of poisoned samples if less
-        selected_indices = torch.randperm(N_poison)[:num_samples_to_show]
+        # num_samples_to_show = min(5, N_poison)  # Show up to 5 samples or the total number of poisoned samples if less
+        # selected_indices = torch.randperm(N_poison)[:num_samples_to_show]
         
-        # Extract the selected samples before and after poisoning
-        X_selected_before_poisoning = X_selected[selected_indices]
-        X_selected_after_poisoning = X_poisoned[selected_indices]
+        # # Extract the selected samples before and after poisoning
+        # X_selected_before_poisoning = X_selected[selected_indices]
+        # X_selected_after_poisoning = X_poisoned[selected_indices]
         
-        # Calculate the delta (difference) between the original and poisoned samples
-        delta = self.delta
+        # # Calculate the delta (difference) between the original and poisoned samples
+        # delta = self.delta
         
-        # Print the selected samples before and after poisoning, and the delta
-        for i in range(num_samples_to_show):
-            print(f"Sample {i + 1} before poisoning:\n{X_selected_before_poisoning[i]}")
-            print(f"Sample {i + 1} after poisoning:\n{X_selected_after_poisoning[i]}")
-            print("-" * 50)
-        print(delta)
+        # # Print the selected samples before and after poisoning, and the delta
+        # for i in range(num_samples_to_show):
+        #     print(f"Sample {i + 1} before poisoning:\n{X_selected_before_poisoning[i]}")
+        #     print(f"Sample {i + 1} after poisoning:\n{X_selected_after_poisoning[i]}")
+        #     print("-" * 50)
+        # print(delta)
         
-        logging.info("Displayed selected samples before and after poisoning, along with their deltas.")
+        # logging.info("Displayed selected samples before and after poisoning, along with their deltas.")
         #####################################
 
         
