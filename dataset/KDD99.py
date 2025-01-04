@@ -7,34 +7,161 @@ from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import OrdinalEncoder, StandardScaler
 import torch
 from torch.utils.data import DataLoader, TensorDataset
-import shap
 
 
-
-class ACI:
+class KDD99:
     """
-    This class is used to load the ACI dataset and convert it into a format suitable for training a model.
+    This class is used to load the KDD99 dataset and convert it into a format suitable for training a model.
     """
 
     def __init__(self, test_size=0.2, random_state=42, batch_size=64):
-
-        self.dataset_name = "aci"
+        self.dataset_name = "kdd99"
         self.num_classes = 2
 
-        # Define the categorical and numerical columns
-        self.cat_cols = ['Workclass', 'Marital Status', 'Occupation', 'Relationship', 'Race', 'Sex', 'Country']
-        
-        self.num_cols = ['Age', 'Education-Num', 'Capital Gain', 'Capital Loss', 'Hours per week']
+        # columns of the dataset
+        cols="""duration,
+        protocol_type,
+        service,
+        flag,
+        src_bytes,
+        dst_bytes,
+        land,
+        wrong_fragment,
+        urgent,
+        hot,
+        num_failed_logins,
+        logged_in,
+        num_compromised,
+        root_shell,
+        su_attempted,
+        num_root,
+        num_file_creations,
+        num_shells,
+        num_access_files,
+        num_outbound_cmds,
+        is_host_login,
+        is_guest_login,
+        count,
+        srv_count,
+        serror_rate,
+        srv_serror_rate,
+        rerror_rate,
+        srv_rerror_rate,
+        same_srv_rate,
+        diff_srv_rate,
+        srv_diff_host_rate,
+        dst_host_count,
+        dst_host_srv_count,
+        dst_host_same_srv_rate,
+        dst_host_diff_srv_rate,
+        dst_host_same_src_port_rate,
+        dst_host_srv_diff_host_rate,
+        dst_host_serror_rate,
+        dst_host_srv_serror_rate,
+        dst_host_rerror_rate,
+        dst_host_srv_rerror_rate"""
+
+        columns=[]
+        for c in cols.split(','):
+            if(c.strip()):
+                columns.append(c.strip())
+
+        columns.append('target')
+
+
+        attacks_types = {
+        'normal': 'normal',
+        'back': 'dos',
+        'buffer_overflow': 'u2r',
+        'ftp_write': 'r2l',
+        'guess_passwd': 'r2l',
+        'imap': 'r2l',
+        'ipsweep': 'probe',
+        'land': 'dos',
+        'loadmodule': 'u2r',
+        'multihop': 'r2l',
+        'neptune': 'dos',
+        'nmap': 'probe',
+        'perl': 'u2r',
+        'phf': 'r2l',
+        'pod': 'dos',
+        'portsweep': 'probe',
+        'rootkit': 'u2r',
+        'satan': 'probe',
+        'smurf': 'dos',
+        'spy': 'r2l',
+        'teardrop': 'dos',
+        'warezclient': 'r2l',
+        'warezmaster': 'r2l',
+        }
+
+
+        # Load the KDD99 dataset from csv path
+        kdd99_path = Path("/home/htajalli/prjs0962/repos/BATD/data/kdd99/kddcup.data_10_percent.gz")
+        df = pd.read_csv(kdd99_path, names=columns, compression='gzip')
+
+        # preprocess the data
+        #Adding Attack Type column
+        df['Attack Type'] = df.target.apply(lambda r:attacks_types[r[:-1]])
+
+
+        df = df.dropna(axis=1)# drop columns with NaN
+
+        df = df[[col for col in df if df[col].nunique() > 1]]# keep columns where there are more than 1 unique values
+
+
+
+        #This variable is highly correlated with num_compromised and should be ignored for analysis.
+        #(Correlation = 0.9938277978738366)
+        df.drop('num_root',axis = 1,inplace = True)
+
+        #This variable is highly correlated with serror_rate and should be ignored for analysis.
+        #(Correlation = 0.9983615072725952)
+        df.drop('srv_serror_rate',axis = 1,inplace = True)
+
+        #This variable is highly correlated with rerror_rate and should be ignored for analysis.
+        #(Correlation = 0.9947309539817937)
+        df.drop('srv_rerror_rate',axis = 1, inplace=True)
+
+        #This variable is highly correlated with srv_serror_rate and should be ignored for analysis.
+        #(Correlation = 0.9993041091850098)
+        df.drop('dst_host_srv_serror_rate',axis = 1, inplace=True)
+
+        #This variable is highly correlated with rerror_rate and should be ignored for analysis.
+        #(Correlation = 0.9869947924956001)
+        df.drop('dst_host_serror_rate',axis = 1, inplace=True)
+
+        #This variable is highly correlated with srv_rerror_rate and should be ignored for analysis.
+        #(Correlation = 0.9821663427308375)
+        df.drop('dst_host_rerror_rate',axis = 1, inplace=True)
+
+        #This variable is highly correlated with rerror_rate and should be ignored for analysis.
+        #(Correlation = 0.9851995540751249)
+        df.drop('dst_host_srv_rerror_rate',axis = 1, inplace=True)
+
+        #This variable is highly correlated with dst_host_srv_count and should be ignored for analysis.
+        #(Correlation = 0.9736854572953938)
+        df.drop('dst_host_same_srv_rate',axis = 1, inplace=True)
+
+        df.drop('service',axis = 1,inplace= True)
+        df = df.drop(['target',], axis=1)
+
+        # Target variable and train set
+        Y = df[['Attack Type']]
+        X = df.drop(['Attack Type'], axis=1)
+
+
 
         self.test_size = test_size
         self.random_state = random_state
         self.batch_size = batch_size
 
-        # Load the ACI dataset from shap
-        X, y = shap.datasets.adult()
+        self.cat_cols = ['protocol_type', 'flag']
 
         # Retrieve the feature names from the dataset: in the same order as they appear in the dataset
         self.feature_names = X.columns.tolist()
+
+        self.num_cols = [col for col in X.columns if col not in self.cat_cols]
 
         self.column_idx = {col: idx for idx, col in enumerate(self.feature_names)}
         self.cat_cols_idx = [self.column_idx[col] for col in self.cat_cols]
@@ -42,15 +169,18 @@ class ACI:
 
         # Store original dataset for reference
         self.X_original = X.copy()
-        # Convert boolean target to binary (0 and 1)
-        self.y = y.astype(int).copy()
+        self.y = Y.copy()
+
+        # Convert self.y using OrdinalEncoder
+        ordinal_encoder = OrdinalEncoder()
+        self.y = ordinal_encoder.fit_transform(self.y).ravel() # Use ravel() to flatten to 1D
 
 
         # Convert categorical columns using OrdinalEncoder
         # This transforms categorical string labels into integer encodings
         ordinal_encoder = OrdinalEncoder()
         self.X_encoded = X.copy()
-        self.X_encoded.loc[:, self.cat_cols] = ordinal_encoder.fit_transform(X[self.cat_cols])
+        self.X_encoded[self.cat_cols] = ordinal_encoder.fit_transform(X[self.cat_cols])
 
 
         # For training the FTT model, I need to know the number of unique categories in each categorical feature as a tuple
@@ -71,6 +201,7 @@ class ACI:
         
         # Initialize a dictionary to store the lookup tables for reverse mapping
         self.lookup_tables = {col: {} for col in self.cat_cols}
+
 
 
     def get_normal_datasets(self, dataloader=False, batch_size=None, test_size=None, random_state=None):
@@ -198,7 +329,7 @@ class ACI:
             # Compute r_jl for each category using the provided formula
             for category, count in freq_counts.items():
                 r_value = (c_max_j - count) / (c_max_j - 1)
-                r_jl[category] = round(r_value, 5)  # Rounded to 5 decimal places for precision
+                r_jl[category] = round(r_value, 6)  # Rounded to 6 decimal places for precision
             
             # Store the mapping in the primary_mappings dictionary
             self.primary_mappings[col] = r_jl
@@ -712,5 +843,7 @@ class ACI:
 
 
 
+
 # if __name__ == "__main__":
-#     aci = ACI()
+#     kdd99 = KDD99()
+

@@ -1,37 +1,47 @@
+import os
 from pathlib import Path
 import pickle
 from typing import Tuple
+from matplotlib import pyplot as plt
 import numpy as np
 import pandas as pd
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import OrdinalEncoder, StandardScaler
 import torch
 from torch.utils.data import DataLoader, TensorDataset
-import shap
+from sklearn.datasets import fetch_openml
+import seaborn as sns
 
 
 
-class ACI:
+class EyeMovement:
     """
-    This class is used to load the ACI dataset and convert it into a format suitable for training a model.
+    This class is used to load the Eye Movement dataset and convert it into a format suitable for training a model.
     """
 
     def __init__(self, test_size=0.2, random_state=42, batch_size=64):
+        self.dataset_name = "eye_movement"
+        self.num_classes = 3        
 
-        self.dataset_name = "aci"
-        self.num_classes = 2
+        # Load the Eye Movement dataset from sklearn
+        X, y = fetch_openml(data_id=1044, as_frame=True, return_X_y=True)
+
+        y = y.astype(int)
 
         # Define the categorical and numerical columns
-        self.cat_cols = ['Workclass', 'Marital Status', 'Occupation', 'Relationship', 'Race', 'Sex', 'Country']
+        self.cat_cols = ['P1stFixation', 'P2stFixation', 'nextWordRegress']
         
-        self.num_cols = ['Age', 'Education-Num', 'Capital Gain', 'Capital Loss', 'Hours per week']
+        self.num_cols = ['lineNo', 'assgNo', 'fixcount', 'firstPassCnt', 'prevFixDur', 'firstfixDur', 'firstPassFixDur',
+       'nextFixDur', 'firstSaccLen', 'lastSaccLen', 'prevFixPos', 'landingPos',
+       'leavingPos', 'totalFixDur', 'meanFixDur', 'nRegressFrom', 'regressLen',
+       'regressDur', 'pupilDiamMax', 'pupilDiamLag',
+       'timePrtctg', 'nWordsInTitle', 'titleNo', 'wordNo']
+        
 
         self.test_size = test_size
         self.random_state = random_state
         self.batch_size = batch_size
 
-        # Load the ACI dataset from shap
-        X, y = shap.datasets.adult()
 
         # Retrieve the feature names from the dataset: in the same order as they appear in the dataset
         self.feature_names = X.columns.tolist()
@@ -50,7 +60,7 @@ class ACI:
         # This transforms categorical string labels into integer encodings
         ordinal_encoder = OrdinalEncoder()
         self.X_encoded = X.copy()
-        self.X_encoded.loc[:, self.cat_cols] = ordinal_encoder.fit_transform(X[self.cat_cols])
+        self.X_encoded[self.cat_cols] = ordinal_encoder.fit_transform(X[self.cat_cols])
 
 
         # For training the FTT model, I need to know the number of unique categories in each categorical feature as a tuple
@@ -73,6 +83,7 @@ class ACI:
         self.lookup_tables = {col: {} for col in self.cat_cols}
 
 
+
     def get_normal_datasets(self, dataloader=False, batch_size=None, test_size=None, random_state=None):
 
         if test_size is None:
@@ -91,11 +102,11 @@ class ACI:
         
         # Convert the data to PyTorch tensors
         X_train_tensor = torch.tensor(X_train.values, dtype=torch.float32)
-        y_train_tensor = torch.tensor(y_train, dtype=torch.long)
+        y_train_tensor = torch.tensor(y_train.values, dtype=torch.long)
         # X_val_tensor = torch.tensor(X_val.values, dtype=torch.float32)
-        # y_val_tensor = torch.tensor(y_val, dtype=torch.long)
+        # y_val_tensor = torch.tensor(y_val.values, dtype=torch.long)
         X_test_tensor = torch.tensor(X_test.values, dtype=torch.float32)
-        y_test_tensor = torch.tensor(y_test, dtype=torch.long)
+        y_test_tensor = torch.tensor(y_test.values, dtype=torch.long)
         
         # Create TensorDatasets for each split
         train_dataset = TensorDataset(X_train_tensor, y_train_tensor)
@@ -112,9 +123,7 @@ class ACI:
             return train_loader, test_loader
         else:
             return train_dataset, test_dataset
-
-
-
+        
     
     def get_normal_datasets_FTT(self, dataloader=False, batch_size=None, test_size=None, random_state=None):
         """
@@ -142,8 +151,8 @@ class ACI:
         X_test_cat_tensor = torch.tensor(X_test_cat.values, dtype=torch.long)
         X_train_num_tensor = torch.tensor(X_train_num.values, dtype=torch.float32)
         X_test_num_tensor = torch.tensor(X_test_num.values, dtype=torch.float32)
-        y_train_tensor = torch.tensor(y_train, dtype=torch.long)
-        y_test_tensor = torch.tensor(y_test, dtype=torch.long)
+        y_train_tensor = torch.tensor(y_train.values, dtype=torch.long)
+        y_test_tensor = torch.tensor(y_test.values, dtype=torch.long)
 
         # Create TensorDatasets for each split
         train_dataset = TensorDataset(X_train_cat_tensor, X_train_num_tensor, y_train_tensor)
@@ -162,6 +171,7 @@ class ACI:
 
 
 
+    
     def compute_primary_frequency_mapping(self):
         """
         Computes the frequency of each category in the categorical features and assigns
@@ -198,7 +208,7 @@ class ACI:
             # Compute r_jl for each category using the provided formula
             for category, count in freq_counts.items():
                 r_value = (c_max_j - count) / (c_max_j - 1)
-                r_jl[category] = round(r_value, 5)  # Rounded to 5 decimal places for precision
+                r_jl[category] = round(r_value, 4)  # Rounded to 4 decimal places for precision
             
             # Store the mapping in the primary_mappings dictionary
             self.primary_mappings[col] = r_jl
@@ -227,6 +237,7 @@ class ACI:
         decimal precision in the primary mapping. This ensures that Delta r is one order
         of magnitude smaller than the smallest decimal precision in Delta r_min.
         """
+
 
         self.largest_p = 0
         # Iterate over each categorical feature
@@ -269,7 +280,7 @@ class ACI:
             # Set Delta r = 10^{-(p + 1)}
             delta_r = 10 ** (-(p + 1))
 
-            # Update the largest p value
+            # Update the largest p value if the current p is greater than the previous largest p
             if p > self.largest_p:
                 self.largest_p = p
             
@@ -372,14 +383,14 @@ class ACI:
                         #     print(f"  Adjusted Delta r = {adjusted_delta_r}")
                             
                         # Round r'_jl to the largest p + 1 decimal places for consistency
-                        r_prime = round(r_prime, self.largest_p + 1)
+                        r_prime = round(float(r_prime), self.largest_p + 1)
                         
                         # Assign r'_jl to the category
                         hierarchical_mapping[category] = r_prime
                         
             # Store the hierarchical mapping
             self.hierarchical_mappings[col] = hierarchical_mapping
-            
+
             # Build the lookup table for reverse mapping
             for category, r_prime in hierarchical_mapping.items():
                 # Ensure the category values and r_prime values are stored correctly
@@ -491,17 +502,18 @@ class ACI:
         
         # Convert the data to PyTorch tensors
         X_train_tensor = torch.tensor(X_train.values, dtype=torch.float32)
-        y_train_tensor = torch.tensor(y_train, dtype=torch.long)
+        y_train_tensor = torch.tensor(y_train.values, dtype=torch.long)
         # X_val_tensor = torch.tensor(X_val.values, dtype=torch.float32)
-        # y_val_tensor = torch.tensor(y_val, dtype=torch.long)
+        # y_val_tensor = torch.tensor(y_val.values, dtype=torch.long)
         X_test_tensor = torch.tensor(X_test.values, dtype=torch.float32)
-        y_test_tensor = torch.tensor(y_test, dtype=torch.long)
+        y_test_tensor = torch.tensor(y_test.values, dtype=torch.long)
         
         # Create TensorDatasets for each split
         train_dataset = TensorDataset(X_train_tensor, y_train_tensor)
         # val_dataset = TensorDataset(X_val_tensor, y_val_tensor)
         test_dataset = TensorDataset(X_test_tensor, y_test_tensor)
         
+
         # Create DataLoader for each split
         train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
         # val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
@@ -512,15 +524,16 @@ class ACI:
             return train_loader, test_loader
         else:
             return train_dataset, test_dataset
+
     
 
-    def save_mappings(self, directory='mappings/ACI'):
+    def save_mappings(self, directory='mappings/eye_movement'):
         """
         Saves the hierarchical mappings and lookup tables to pickle files within the specified directory.
         
         Args:
             directory (str or Path, optional): The directory where mapping files will be saved.
-                                               Defaults to 'mappings/ACI'.
+                                               Defaults to 'mappings/eye_movement'.
         """
         # Convert directory to Path object
         path = Path(directory)
@@ -542,13 +555,13 @@ class ACI:
         
         print(f"Hierarchical mappings and lookup tables have been saved to '{path.resolve()}'.")
 
-    def load_mappings(self, directory='mappings/ACI'):
+    def load_mappings(self, directory='mappings/eye_movement'):
         """
         Loads the hierarchical mappings and lookup tables from pickle files within the specified directory.
         
         Args:
             directory (str or Path, optional): The directory from where mapping files will be loaded.
-                                               Defaults to 'mappings/ACI'.
+                                               Defaults to 'mappings/eye_movement'.
         
         Raises:
             FileNotFoundError: If the mapping files are not found in the specified directory.
@@ -657,7 +670,7 @@ class ACI:
 
         Returns:
             TensorDataset: The dataset with original categorical features restored.
-        
+
         Raises:
             ValueError: If a numerical value does not have a corresponding key in the lookup table.
         """
@@ -712,5 +725,8 @@ class ACI:
 
 
 
+
+
+
 # if __name__ == "__main__":
-#     aci = ACI()
+#     eye_movement = EyeMovement()

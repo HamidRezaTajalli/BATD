@@ -9,21 +9,36 @@ import torch
 from torch.utils.data import DataLoader, TensorDataset
 
 
-class HIGGS:
+class Diabetes:
     """
-    This class is used to load the HIGGS dataset and convert it into a format suitable for training a model.
+    This class is used to load the Diabetes dataset and convert it into a format suitable for training a model.
     """
 
     def __init__(self, test_size=0.2, random_state=42, batch_size=64):
 
-        self.dataset_name = "higgs"
+        self.dataset_name = "diabetes"
         self.num_classes = 2
 
-        # Load the HIGGS dataset from sklearn
-        data = pd.read_pickle("/home/htajalli/prjs0962/repos/BATD/data/processed.pkl")
+        # Load the Diabetes dataset from csv path
+        diabetes_data = pd.read_csv("/home/htajalli/prjs0962/repos/BATD/data/diabetes.csv")
 
-        X = data.drop(columns=["target"])
-        y = data["target"]
+        
+        # preprocess the data
+
+        # Replace 0 with NaN in the columns ['Glucose','BloodPressure','SkinThickness','Insulin','BMI']
+        diabetes_data_copy = diabetes_data.copy(deep = True)
+        diabetes_data_copy[['Glucose','BloodPressure','SkinThickness','Insulin','BMI']] = diabetes_data_copy[['Glucose','BloodPressure','SkinThickness','Insulin','BMI']].replace(0,np.nan)
+
+        # Fill the NaN values with the mean of the column
+        diabetes_data_copy['Glucose'].fillna(diabetes_data_copy['Glucose'].mean(), inplace = True)
+        diabetes_data_copy['BloodPressure'].fillna(diabetes_data_copy['BloodPressure'].mean(), inplace = True)
+        diabetes_data_copy['SkinThickness'].fillna(diabetes_data_copy['SkinThickness'].median(), inplace = True)
+        diabetes_data_copy['Insulin'].fillna(diabetes_data_copy['Insulin'].median(), inplace = True)
+        diabetes_data_copy['BMI'].fillna(diabetes_data_copy['BMI'].median(), inplace = True)
+
+
+        X = diabetes_data_copy.drop(columns=["Outcome"])
+        y = diabetes_data_copy["Outcome"]
 
         # Define the categorical and numerical columns
         self.cat_cols = []
@@ -46,7 +61,7 @@ class HIGGS:
 
         # Convert categorical columns using OrdinalEncoder
         # This transforms categorical string labels into integer encodings
-        # Since, HIGGS dataset has no categorical columns, this is not used
+        # Since, Diabetes dataset has no categorical columns, this is not used
         # ordinal_encoder = OrdinalEncoder()
         self.X_encoded = self.X_original.copy()
 
@@ -54,26 +69,8 @@ class HIGGS:
         scaler = StandardScaler()
         self.X_encoded[self.num_cols] = scaler.fit_transform(self.X_encoded[self.num_cols])
 
-
-        # # For training the FTT model, I need to know the number of unique categories in each categorical feature as a tuple
-        # # Since, HIGGS dataset has no categorical columns, this is not used
-        # self.FTT_n_categories = None
-
-        # # Initialize a dictionary to store the primary mappings for each categorical feature
-        # # Since, HIGGS dataset has no categorical columns, this is not used
-        # self.primary_mappings = None
-
-        # # Initialize a dictionary to store the adaptive Delta r for each categorical feature
-        # # Since, HIGGS dataset has no categorical columns, this is not used
-        # self.delta_r_values = None
-
-        # # Initialize a dictionary to store the hierarchical mappings for each categorical feature
-        # # Since, HIGGS dataset has no categorical columns, this is not used
-        # self.hierarchical_mappings = None
         
-        # # Initialize a dictionary to store the lookup tables for reverse mapping
-        # # Since, HIGGS dataset has no categorical columns, this is not used
-        # self.lookup_tables = None
+
 
     def get_normal_datasets(self, dataloader=False, batch_size=None, test_size=None, random_state=None):
 
@@ -138,5 +135,18 @@ class HIGGS:
 
 
 
+
+
+
+
+
 # if __name__ == "__main__":
-#     dataset = HIGGS()
+#     diabetes = Diabetes()
+
+#     train, test = diabetes.get_normal_datasets(dataloader=False)
+#     print(diabetes.y.head())
+#     #print y datatype
+#     print(diabetes.y.dtype)
+
+
+

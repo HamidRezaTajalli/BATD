@@ -7,34 +7,59 @@ from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import OrdinalEncoder, StandardScaler
 import torch
 from torch.utils.data import DataLoader, TensorDataset
-import shap
 
 
-
-class ACI:
+class BankMarketing:
     """
-    This class is used to load the ACI dataset and convert it into a format suitable for training a model.
+    This class is used to load the Bank Marketing dataset and convert it into a format suitable for training a model.
     """
+
+    def get_correct_values(self, row, column_name, threshold, df):
+        ''' Returns mean value if value in column_name is above threshold'''
+        if row[column_name] <= threshold:
+            return row[column_name]
+        else:
+            mean = df[df[column_name] <= threshold][column_name].mean()
+            return mean
+
 
     def __init__(self, test_size=0.2, random_state=42, batch_size=64):
 
-        self.dataset_name = "aci"
+        self.dataset_name = "bank_marketing"
         self.num_classes = 2
 
-        # Define the categorical and numerical columns
-        self.cat_cols = ['Workclass', 'Marital Status', 'Occupation', 'Relationship', 'Race', 'Sex', 'Country']
         
-        self.num_cols = ['Age', 'Education-Num', 'Capital Gain', 'Capital Loss', 'Hours per week']
+        #import dataset
+        df = pd.read_csv('/home/htajalli/prjs0962/repos/BATD/data/bank.csv')
+
+        #drop irrelevant columns
+        clean_df = df.drop(columns = ['pdays'])
+
+        #impute incorrect values and drop original columns
+        clean_df['campaign_cleaned'] = df.apply(lambda row: self.get_correct_values(row, 'campaign', 34, clean_df),axis=1)
+        clean_df['previous_cleaned'] = df.apply(lambda row: self.get_correct_values(row, 'previous', 34, clean_df),axis=1)
+        
+        clean_df = clean_df.drop(columns = ['campaign', 'previous'])
+
+        # Rename the cleaned columns to their original names
+        clean_df.rename(columns={'campaign_cleaned': 'campaign', 'previous_cleaned': 'previous'}, inplace=True)
+
+
+        # Define the categorical and numerical columns
+        self.cat_cols = ['job', 'marital', 'education', 'default', 'housing', 'loan', 'contact', 'month','poutcome']
+        self.num_cols = ['age','balance', 'day','duration', 'campaign', 'previous']
+
+        X = clean_df.drop(columns = 'deposit')
+        y = clean_df['deposit']
 
         self.test_size = test_size
         self.random_state = random_state
         self.batch_size = batch_size
 
-        # Load the ACI dataset from shap
-        X, y = shap.datasets.adult()
 
         # Retrieve the feature names from the dataset: in the same order as they appear in the dataset
         self.feature_names = X.columns.tolist()
+
 
         self.column_idx = {col: idx for idx, col in enumerate(self.feature_names)}
         self.cat_cols_idx = [self.column_idx[col] for col in self.cat_cols]
@@ -42,15 +67,15 @@ class ACI:
 
         # Store original dataset for reference
         self.X_original = X.copy()
-        # Convert boolean target to binary (0 and 1)
-        self.y = y.astype(int).copy()
+        # Convert yes/no target to binary (0 and 1)
+        self.y = y.map({'yes': 1, 'no': 0}).copy()  
 
 
         # Convert categorical columns using OrdinalEncoder
         # This transforms categorical string labels into integer encodings
         ordinal_encoder = OrdinalEncoder()
         self.X_encoded = X.copy()
-        self.X_encoded.loc[:, self.cat_cols] = ordinal_encoder.fit_transform(X[self.cat_cols])
+        self.X_encoded[self.cat_cols] = ordinal_encoder.fit_transform(X[self.cat_cols])
 
 
         # For training the FTT model, I need to know the number of unique categories in each categorical feature as a tuple
@@ -73,6 +98,7 @@ class ACI:
         self.lookup_tables = {col: {} for col in self.cat_cols}
 
 
+
     def get_normal_datasets(self, dataloader=False, batch_size=None, test_size=None, random_state=None):
 
         if test_size is None:
@@ -84,6 +110,7 @@ class ACI:
 
         # Split the data into train and temporary sets (temporary set will be further split into validation and test)
         X_train, X_test, y_train, y_test = train_test_split(self.X_encoded, self.y, test_size=test_size, random_state=random_state, stratify=self.y)
+
         
         # Further split the temporary set into validation and test sets
         # val_size_adjusted = self.val_size / (1 - test_size)  # Adjust validation size based on remaining data
@@ -91,11 +118,11 @@ class ACI:
         
         # Convert the data to PyTorch tensors
         X_train_tensor = torch.tensor(X_train.values, dtype=torch.float32)
-        y_train_tensor = torch.tensor(y_train, dtype=torch.long)
+        y_train_tensor = torch.tensor(y_train.values, dtype=torch.long)
         # X_val_tensor = torch.tensor(X_val.values, dtype=torch.float32)
-        # y_val_tensor = torch.tensor(y_val, dtype=torch.long)
+        # y_val_tensor = torch.tensor(y_val.values, dtype=torch.long)
         X_test_tensor = torch.tensor(X_test.values, dtype=torch.float32)
-        y_test_tensor = torch.tensor(y_test, dtype=torch.long)
+        y_test_tensor = torch.tensor(y_test.values, dtype=torch.long)
         
         # Create TensorDatasets for each split
         train_dataset = TensorDataset(X_train_tensor, y_train_tensor)
@@ -142,8 +169,8 @@ class ACI:
         X_test_cat_tensor = torch.tensor(X_test_cat.values, dtype=torch.long)
         X_train_num_tensor = torch.tensor(X_train_num.values, dtype=torch.float32)
         X_test_num_tensor = torch.tensor(X_test_num.values, dtype=torch.float32)
-        y_train_tensor = torch.tensor(y_train, dtype=torch.long)
-        y_test_tensor = torch.tensor(y_test, dtype=torch.long)
+        y_train_tensor = torch.tensor(y_train.values, dtype=torch.long)
+        y_test_tensor = torch.tensor(y_test.values, dtype=torch.long)
 
         # Create TensorDatasets for each split
         train_dataset = TensorDataset(X_train_cat_tensor, X_train_num_tensor, y_train_tensor)
@@ -158,7 +185,6 @@ class ACI:
             return train_loader, test_loader
         else:
             return train_dataset, test_dataset
-
 
 
 
@@ -491,11 +517,11 @@ class ACI:
         
         # Convert the data to PyTorch tensors
         X_train_tensor = torch.tensor(X_train.values, dtype=torch.float32)
-        y_train_tensor = torch.tensor(y_train, dtype=torch.long)
+        y_train_tensor = torch.tensor(y_train.values, dtype=torch.long)
         # X_val_tensor = torch.tensor(X_val.values, dtype=torch.float32)
-        # y_val_tensor = torch.tensor(y_val, dtype=torch.long)
+        # y_val_tensor = torch.tensor(y_val.values, dtype=torch.long)
         X_test_tensor = torch.tensor(X_test.values, dtype=torch.float32)
-        y_test_tensor = torch.tensor(y_test, dtype=torch.long)
+        y_test_tensor = torch.tensor(y_test.values, dtype=torch.long)
         
         # Create TensorDatasets for each split
         train_dataset = TensorDataset(X_train_tensor, y_train_tensor)
@@ -514,13 +540,13 @@ class ACI:
             return train_dataset, test_dataset
     
 
-    def save_mappings(self, directory='mappings/ACI'):
+    def save_mappings(self, directory='mappings/BM'):
         """
         Saves the hierarchical mappings and lookup tables to pickle files within the specified directory.
         
         Args:
             directory (str or Path, optional): The directory where mapping files will be saved.
-                                               Defaults to 'mappings/ACI'.
+                                               Defaults to 'mappings/BM'.
         """
         # Convert directory to Path object
         path = Path(directory)
@@ -542,13 +568,13 @@ class ACI:
         
         print(f"Hierarchical mappings and lookup tables have been saved to '{path.resolve()}'.")
 
-    def load_mappings(self, directory='mappings/ACI'):
+    def load_mappings(self, directory='mappings/BM'):
         """
         Loads the hierarchical mappings and lookup tables from pickle files within the specified directory.
         
         Args:
             directory (str or Path, optional): The directory from where mapping files will be loaded.
-                                               Defaults to 'mappings/ACI'.
+                                               Defaults to 'mappings/BM'.
         
         Raises:
             FileNotFoundError: If the mapping files are not found in the specified directory.
@@ -712,5 +738,22 @@ class ACI:
 
 
 
+
+
+
+
+        
+
+
+        
+
+
+
+
+
+
 # if __name__ == "__main__":
-#     aci = ACI()
+#     dataset = BankMarketing()
+#     train, test = dataset.get_normal_datasets()
+
+        
