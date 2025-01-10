@@ -16,7 +16,7 @@ class KDD99:
 
     def __init__(self, test_size=0.2, random_state=42, batch_size=64):
         self.dataset_name = "kdd99"
-        self.num_classes = 2
+        self.num_classes = 5
 
         # columns of the dataset
         cols="""duration,

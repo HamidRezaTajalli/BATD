@@ -129,10 +129,14 @@ class Attack:
             )
         elif self.model.model_name == "SAINT":
             X_train, y_train = self.data_obj._get_dataset_data(train_dataset)
+
+            X_val, y_val = self.data_obj._get_dataset_data(val_dataset)
             
             self.model.fit(
-                X_tab=X_train, 
-                target=y_train
+                X_train=X_train, 
+                y_train=y_train,
+                X_val=X_val,
+                y_val=y_val
             )
         elif self.model.model_name == "FTTransformer":
             if converted:
@@ -166,6 +170,12 @@ class Attack:
             else:
                 accuracy = self.model.predict(testset)
             print(f"Test Accuracy: {accuracy * 100:.2f}%")
+
+        elif self.model.model_name == "SAINT":
+            X_test, y_test = self.data_obj._get_dataset_data(testset)
+            accuracy = self.model.predict(X_test, y_test)
+            print(f"Test Accuracy: {accuracy}")
+            
         else:
             raise ValueError(f"Model {self.model.model_name} not supported.")
 

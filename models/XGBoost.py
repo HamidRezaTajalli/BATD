@@ -220,15 +220,6 @@ class XGBoostModel:
 
 
 
-# Example usage:
-# Initialize a TabNet model
-# tabnet_model = TabNetModel(input_dim=54, output_dim=7)
-# Train the model
-# tabnet_model.fit(X_train, y_train, X_valid=X_val, y_valid=y_val)
-# Get the trained model
-# model = tabnet_model.get_model()
-
-
 # if __name__ == "__main__":
 #     xgb_model = XGBoostModel(objective="multi")
 #     print(xgb.__version__)

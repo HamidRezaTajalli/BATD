@@ -6,6 +6,7 @@ from attack import Attack
 from dataset.CovType import CovType  # Importing the ConvertCovType class from CovType.py
 from models.FTT import FTTModel
 from models.Tabnet import TabNetModel
+from models.SAINT import SAINTModel
 from dataset.BM import BankMarketing
 from dataset.ACI import ACI
 from dataset.HIGGS import HIGGS
@@ -58,21 +59,23 @@ def main():
     epsilon = 0.02
     
     # Step 1: Initialize the dataset object which can handle, convert and revert the dataset.
-    data_obj = CreditCard()
+    data_obj = CovType()
 
     # Step 2: Initialize the model. If needed (optional), the model can be loaded from a saved model. Then the model is not needed to be trained again.
     # model = FTTModel(data_obj=data_obj)
 
-    model = TabNetModel(
-            n_d=64,
-            n_a=64,
-            n_steps=5,
-            gamma=1.5,
-            n_independent=2,
-            n_shared=2,
-            momentum=0.3,
-            mask_type='entmax'
-        )
+    # model = TabNetModel(
+    #         n_d=64,
+    #         n_a=64,
+    #         n_steps=5,
+    #         gamma=1.5,
+    #         n_independent=2,
+    #         n_shared=2,
+    #         momentum=0.3,
+    #         mask_type='entmax'
+    #     )
+
+    model = SAINTModel(data_obj=data_obj, is_numerical=True)
 
     model.to(device)
 
@@ -99,6 +102,7 @@ def main():
     # Get current Unix timestamp
     unix_timestamp = int(time.time())
 
+    exit()
 
     # Save the model with Unix timestamp in the filename
     attack.model.save_model(f"./saved_models/clean/{attack.model.model_name}_{data_obj.dataset_name}_{unix_timestamp}")
