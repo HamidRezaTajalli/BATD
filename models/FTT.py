@@ -436,9 +436,9 @@ class FTTModel:
         None
         """
         if model_type == "converted":
-            self.model_converted.save_model(filepath)
+            torch.save(self.model_converted.state_dict(), filepath)
         elif model_type == "original":
-            self.model_original.save_model(filepath)
+            torch.save(self.model_original.state_dict(), filepath)
         else:
             raise ValueError(f"Invalid model type: {model_type}. Please choose 'converted' or 'original'.")
     
@@ -453,9 +453,9 @@ class FTTModel:
         None
         """
         if model_type == "converted":
-            self.model_converted.load_model(filepath)
+            self.model_converted.load_state_dict(torch.load(filepath))
         elif model_type == "original":
-            self.model_original.load_model(filepath)
+            self.model_original.load_state_dict(torch.load(filepath))
         else:
             raise ValueError(f"Invalid model type: {model_type}. Please choose 'converted' or 'original'.")
 

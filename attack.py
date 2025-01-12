@@ -163,6 +163,7 @@ class Attack:
             # Calculate accuracy using NumPy
             accuracy = (preds == y_test).mean()
             print(f"Test Accuracy: {accuracy * 100:.2f}%")
+            test_accuracy = accuracy * 100
 
         elif self.model.model_name == "FTTransformer":
             if converted:
@@ -170,16 +171,18 @@ class Attack:
             else:
                 accuracy = self.model.predict(testset)
             print(f"Test Accuracy: {accuracy * 100:.2f}%")
+            test_accuracy = accuracy * 100
 
         elif self.model.model_name == "SAINT":
             X_test, y_test = self.data_obj._get_dataset_data(testset)
             accuracy = self.model.predict(X_test, y_test)
             print(f"Test Accuracy: {accuracy}")
-            
+            test_accuracy = accuracy
+
         else:
             raise ValueError(f"Model {self.model.model_name} not supported.")
 
-        return accuracy
+        return test_accuracy
     
 
     def select_non_target_samples(self) -> TensorDataset:
@@ -589,6 +592,8 @@ class Attack:
             poisoned_samples (TensorDataset): The set of poisoned samples.
         """
 
+        self.epsilon = epsilon
+
         if self.D_picked is None:
             raise ValueError("D_picked is not initialized. Please run confidence_based_sample_ranking() first.")
         
@@ -711,7 +716,7 @@ class Attack:
             # Create the directory if it doesn't exist
             file_dir.mkdir(parents=True, exist_ok=True)
             # Define the default filepath
-            filepath = file_dir / f"{self.data_obj.dataset_name}_{self.model.model_name}_{self.target_label}_{self.mu}_{self.beta}_{self.lambd}_poisoned_dataset.pt"
+            filepath = file_dir / f"{self.data_obj.dataset_name}_{self.model.model_name}_{self.target_label}_{self.mu}_{self.beta}_{self.lambd}_{self.epsilon}_poisoned_dataset.pt"
         
         # Save the poisoned dataset tensors
         torch.save({
@@ -736,7 +741,7 @@ class Attack:
         if filepath is None:
             file_dir = Path("./saved_datasets")
             # Define the default filepath
-            filepath = file_dir / f"{self.data_obj.dataset_name}_{self.model.model_name}_{self.target_label}_{self.mu}_{self.beta}_{self.lambd}_poisoned_dataset.pt"
+            filepath = file_dir / f"{self.data_obj.dataset_name}_{self.model.model_name}_{self.target_label}_{self.mu}_{self.beta}_{self.lambd}_{self.epsilon}_poisoned_dataset.pt"
 
         if not filepath.exists():
             raise FileNotFoundError(f"The poisoned dataset file '{filepath}' does not exist.")
@@ -750,7 +755,3 @@ class Attack:
         self.poisoned_samples = (data['poisoned_train_samples'], data['poisoned_test_samples'])
         
         logging.info(f"Poisoned dataset loaded from '{filepath}' with {len(self.poisoned_dataset[0])} samples in trainset and {len(self.poisoned_dataset[1])} samples in testset.")
-
-
-
-# TODO: Unite test all the methods in the Attack class. 
