@@ -256,9 +256,9 @@ def classification_scores(model, dloader, device, task, vision_dset):
     correct_results_sum = (y_pred == y_test).sum().float()
     acc = correct_results_sum / y_test.shape[0] * 100
 
-    # Compute AUROC only for binary classification
+    # Compute AUROC only for binary classification and if there are more than 1 class in y_true
     auc = 0
-    if task == 'binary':
+    if task == 'binary' and len(torch.unique(y_test)) > 1:
         auc = roc_auc_score(y_score=prob.cpu(), y_true=y_test.cpu())
 
     return acc.cpu().numpy(), auc

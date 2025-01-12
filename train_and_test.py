@@ -108,16 +108,40 @@
 
 if __name__ == '__main__':
     from models.SAINT import SAINTModel
+    from models.Tabnet import TabNetModel
+    from models.FTT import FTTModel
     from dataset.CovType import CovType
+    from dataset.ACI import ACI
 
-    covtype = CovType()
-    saint = SAINTModel(data_obj=covtype, is_numerical=True)
+    data_obj = ACI()
+    saint = SAINTModel(data_obj=data_obj, is_numerical=False)
+    tabnet = TabNetModel()
+    ftt = FTTModel(data_obj=data_obj)
 
 
-    train, test = covtype.get_converted_dataset(dataloader=True)
+    # train, test = covtype.get_converted_dataset(dataloader=False)
 
+    # x_test, y_test = covtype._get_dataset_data(test)
+
+    # saint.predict(x_test, y_test)
+
+    # train, test = data_obj.get_normal_datasets(dataloader=False)
+    # x_train, y_train = data_obj._get_dataset_data(train)
+    # x_test, y_test = data_obj._get_dataset_data(test)
+
+    # saint.fit(x_train, y_train, x_test, y_test)
+
+
+    train, test = data_obj.get_normal_datasets(dataloader=True)
     for x, y in train:
 
         out = saint.forward(x)
         print(out.shape)
+
+        # out = tabnet.forward(x)
+        # print(out.shape)
+
+        out = ftt.forward(x)
+        print(out.shape)
+
         exit()

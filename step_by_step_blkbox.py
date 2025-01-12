@@ -5,7 +5,8 @@ import time # Import time module for Unix timestamp
 from attack import Attack
 from dataset.CovType import CovType  # Importing the ConvertCovType class from CovType.py
 from models.FTT import FTTModel
-from models.XGBoost import XGBoostModel
+# from models.XGBoost import XGBoostModel
+from models.CatBoost import CatBoostModel
 from models.Tabnet import TabNetModel
 from dataset.ACI import ACI
 
@@ -136,7 +137,7 @@ def main():
 
     # Step 11: Define the black box model
     objective = "multi" if attack.data_obj.num_classes > 2 else "binary"
-    black_box_model = XGBoostModel(objective=objective)
+    black_box_model = CatBoostModel(objective=objective)
     black_box_model.to(device)
     attack.model = black_box_model
 
@@ -175,9 +176,3 @@ def main():
 if __name__ == "__main__":
     main()
 
-
-
-
-# TODO:
-# - comment in detial all the steps in  the main function. the attakc should be done in step by step manner exactly described in the paper.
-# - If loaded path is given, the model is not needed to be trained again.

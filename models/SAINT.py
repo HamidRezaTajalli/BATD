@@ -74,7 +74,10 @@ class SAINTModel:
             self.cat_dims = data_obj.FTT_n_categories
             self.cat_idxs = data_obj.cat_cols_idx
         
-        self.con_idxs = data_obj.column_idx if is_numerical else data_obj.num_cols_idx
+        if is_numerical:
+            self.con_idxs = [i for i in range(len(data_obj.feature_names))]
+        else:
+            self.con_idxs = data_obj.num_cols_idx
 
 
         # cat_dims array holds the distinct number of categories for each categorical feature.
@@ -583,36 +586,86 @@ class SAINTModel:
         self.model.load_state_dict(torch.load(filepath))
 
 
+    # def forward(self, X: torch.Tensor) -> torch.Tensor:
+    #     ''' Returns logits for the input features'''
+
+    #     # Convert torch tensor to numpy array
+    #     X = X.numpy()
+
+    #     X_mask = (np.isnan(X) == False).astype(int)
+
+    #     X_categ, X_cont = X[:, self.cat_idxs], X[:, self.con_idxs]
+
+    #     X_categ_mask = X_mask[:, self.cat_idxs].astype(np.int64)
+    #     X_cont_mask = X_mask[:, self.con_idxs].astype(np.int64)
+
+    #     # As a cls token, add a column of 0s to the beginning of X_categ
+    #     X_categ = np.concatenate([np.zeros((X_categ.shape[0], 1)), X_categ], axis=1)
+
+    #     # As a cls mask, add a column of 1s to the beginning of X_categ_mask
+    #     X_categ_mask = np.concatenate([np.ones((X_categ_mask.shape[0], 1)), X_categ_mask], axis=1)
+
+    #     # convert all the numpy arrays to torch tensors
+    #     X_categ = torch.tensor(X_categ, dtype=torch.int64)
+    #     X_cont = torch.tensor(X_cont, dtype=torch.float32)
+    #     X_categ_mask = torch.tensor(X_categ_mask, dtype=torch.int64)
+    #     X_cont_mask = torch.tensor(X_cont_mask, dtype=torch.int64)
+
+    #     self.model.eval()
+    #     with torch.no_grad():
+
+    #         _, X_categ_enc, X_cont_enc = embed_data_mask(X_categ, X_cont, X_categ_mask, X_cont_mask, self.model)
+
+    #         reps = self.model.transformer(X_categ_enc, X_cont_enc)
+
+    #         y_reps = reps[:, 0, :]
+
+    #         y_outs = self.model.mlpfory(y_reps)
+
+    #     return y_outs
+
+
+
     def forward(self, X: torch.Tensor) -> torch.Tensor:
-        # Return logits for the input features
+        """
+        Returns logits for the input features
+        """
 
-        # Convert torch tensor to numpy array
-        X = X.numpy()
+        # Create a mask for non-NaN values (1 for valid values, 0 for NaN)
+        X_mask = (~X.isnan()).int()
 
-        X_mask = (np.isnan(X) == False).astype(int)
 
-        X_categ, X_cont = X[:, self.cat_idxs], X[:, self.con_idxs]
+        # Separate categorical and continuous columns
+        X_categ = X[:, self.cat_idxs]
+        X_cont = X[:, self.con_idxs]
 
-        X_categ_mask = X_mask[:, self.cat_idxs].astype(np.int64)
-        X_cont_mask = X_mask[:, self.con_idxs].astype(np.int64)
+        # Separate the masks for categorical and continuous columns
+        X_categ_mask = X_mask[:, self.cat_idxs]
+        X_cont_mask = X_mask[:, self.con_idxs]
 
-        # As a cls token, add a column of 0s to the beginning of X_categ
-        X_categ = np.concatenate([np.zeros((X_categ.shape[0], 1)), X_categ], axis=1)
+        # Add a "CLS" token (0) as the first column of X_categ
+        cls_token = torch.zeros((X_categ.size(0), 1), device=X.device)
+        X_categ = torch.cat([cls_token, X_categ], dim=1)
 
-        # As a cls mask, add a column of 1s to the beginning of X_categ_mask
-        X_categ_mask = np.concatenate([np.ones((X_categ_mask.shape[0], 1)), X_categ_mask], axis=1)
+        # Add a "CLS" mask (1) as the first column of X_categ_mask
+        cls_mask = torch.ones((X_categ_mask.size(0), 1), device=X.device)
+        X_categ_mask = torch.cat([cls_mask, X_categ_mask], dim=1)
 
+        # Convert to appropriate dtypes
+        X_categ = X_categ.long()
+        X_cont = X_cont.float()
+        X_categ_mask = X_categ_mask.long()
+        X_cont_mask = X_cont_mask.long()
+
+        # Forward pass
         self.model.eval()
         with torch.no_grad():
-
-            _, X_categ_enc, X_cont_enc = embed_data_mask(X_categ, X_cont, X_categ_mask, X_cont_mask, self.model)
-
+            _, X_categ_enc, X_cont_enc = embed_data_mask(
+                X_categ, X_cont, X_categ_mask, X_cont_mask, self.model
+            )
             reps = self.model.transformer(X_categ_enc, X_cont_enc)
-
-            y_reps = reps[:, 0, :]
-
+            y_reps = reps[:, 0, :]       # Take [CLS] token representation
             y_outs = self.model.mlpfory(y_reps)
 
         return y_outs
-
 

@@ -178,3 +178,9 @@ cython_debug/
 
 # everything in data directory
 data/
+
+# everything in saved_models directory
+saved_models/
+
+# everything in catboost_info directory
+catboost_info/

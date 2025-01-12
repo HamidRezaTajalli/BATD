@@ -3,10 +3,15 @@ import torch
 import logging
 import time # Import time module for Unix timestamp
 from attack import Attack
-from dataset.CovType import CovType  # Importing the ConvertCovType class from CovType.py
+
+# importing all the models for this project
 from models.FTT import FTTModel
 from models.Tabnet import TabNetModel
 from models.SAINT import SAINTModel
+from models.CatBoost import CatBoostModel
+from models.XGBoost import XGBoostModel
+
+# importing all the datasets for this project
 from dataset.BM import BankMarketing
 from dataset.ACI import ACI
 from dataset.HIGGS import HIGGS
@@ -14,6 +19,8 @@ from dataset.Diabetes import Diabetes
 from dataset.Eye_Movement import EyeMovement
 from dataset.KDD99 import KDD99
 from dataset.CreditCard import CreditCard
+from dataset.CovType import CovType  # Importing the ConvertCovType class from CovType.py
+
 
 
 
@@ -42,7 +49,7 @@ logging.basicConfig(
 # ============================================
 
 
-def main():
+def attack_step_by_step():
     """
     The main function orchestrates the attack setup by executing the initial model training steps,
     retraining on the poisoned dataset, and evaluating the backdoor's effectiveness.
@@ -59,7 +66,7 @@ def main():
     epsilon = 0.02
     
     # Step 1: Initialize the dataset object which can handle, convert and revert the dataset.
-    data_obj = CovType()
+    data_obj = ACI()
 
     # Step 2: Initialize the model. If needed (optional), the model can be loaded from a saved model. Then the model is not needed to be trained again.
     # model = FTTModel(data_obj=data_obj)
@@ -102,7 +109,6 @@ def main():
     # Get current Unix timestamp
     unix_timestamp = int(time.time())
 
-    exit()
 
     # Save the model with Unix timestamp in the filename
     attack.model.save_model(f"./saved_models/clean/{attack.model.model_name}_{data_obj.dataset_name}_{unix_timestamp}")
@@ -164,6 +170,11 @@ def main():
     clean_trainset = clean_dataset[0]
     clean_testset = clean_dataset[1]
 
+    # for SAINT, we need the define a new model with is_numerical=False so 
+    # the model can handle the categorical features as well.
+    if attack.model.model_name == "SAINT":
+        attack.model = SAINTModel(data_obj=attack.data_obj, is_numerical=False)
+
     logging.info("=== Training the model on the poisoned training dataset ===")
     # Step 12: Train the model on the poisoned training dataset
     converted = False if FTT and data_obj.cat_cols else True
@@ -183,11 +194,6 @@ def main():
 
 # Execute the main function when the script is run directly
 if __name__ == "__main__":
-    main()
+    attack_step_by_step()
 
 
-
-
-# TODO:
-# - comment in detial all the steps in  the main function. the attakc should be done in step by step manner exactly described in the paper.
-# - If loaded path is given, the model is not needed to be trained again.
