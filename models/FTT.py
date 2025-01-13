@@ -118,6 +118,8 @@ class FTTModel:
         patience = 20
         trigger_times = 0
 
+        best_fttransformer_original = None
+
         for epoch in range(1, epochs + 1):
             self.model_original.train()
             total_loss = 0
@@ -177,7 +179,7 @@ class FTTModel:
             if avg_val_loss < best_val_loss:
                 best_val_loss = avg_val_loss
                 trigger_times = 0
-                torch.save(self.model_original.state_dict(), f'best_fttransformer_original_{self.data_obj.dataset_name}.pth')
+                best_fttransformer_original = self.model_original.state_dict()
             else:
                 trigger_times += 1
                 if trigger_times >= patience:
@@ -185,7 +187,7 @@ class FTTModel:
                     break
 
         # 12. Load the best model and evaluate
-        self.model_original.load_state_dict(torch.load(f'best_fttransformer_original_{self.data_obj.dataset_name}.pth'))
+        self.model_original.load_state_dict(best_fttransformer_original)
         self.model_original.eval()
 
         all_preds = []
@@ -236,6 +238,8 @@ class FTTModel:
         best_val_loss = float('inf')
         patience = 20
         trigger_times = 0
+
+        best_fttransformer_converted = None
 
         for epoch in range(1, epochs + 1):
             self.model_converted.train()
@@ -296,7 +300,7 @@ class FTTModel:
             if avg_val_loss < best_val_loss:
                 best_val_loss = avg_val_loss
                 trigger_times = 0
-                torch.save(self.model_converted.state_dict(), f'best_fttransformer_converted_{self.data_obj.dataset_name}.pth')
+                best_fttransformer_converted = self.model_converted.state_dict()
             else:
                 trigger_times += 1
                 if trigger_times >= patience:
@@ -304,7 +308,7 @@ class FTTModel:
                     break
 
         # 12. Load the best model and evaluate
-        self.model_converted.load_state_dict(torch.load(f'best_fttransformer_converted_{self.data_obj.dataset_name}.pth'))
+        self.model_converted.load_state_dict(best_fttransformer_converted)
         self.model_converted.eval()
 
         all_preds = []

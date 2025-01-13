@@ -181,9 +181,9 @@ def attack_step_by_step(args, use_saved_models, use_existing_trigger):
     unix_timestamp = int(time.time())
 
 
-    # If we are not using the already trained model, then save the model in the path.
-    if not use_saved_models['clean']:
-        attack.model.save_model(clean_model_address)
+    # # If we are not using the already trained model, then save the model in the path.
+    # if not use_saved_models['clean']:
+    #     attack.model.save_model(clean_model_address)
     
 
     # Step 6: Select non-target samples from the training dataset
@@ -331,7 +331,7 @@ if __name__ == "__main__":
     if args.epsilon < 0 or args.epsilon > 1:
         raise ValueError(f"Epsilon must be between 0 and 1. You provided: {args.epsilon}")
     
-    use_saved_models = {'clean': True, 'poisoned': False}
+    use_saved_models = {'clean': False, 'poisoned': False}
     use_existing_trigger = False
 
     # log all the arguments before running the experiment

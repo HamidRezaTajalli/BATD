@@ -6,7 +6,7 @@
 #SBATCH --cpus-per-task=4
 #SBATCH --partition=gpu_a100
 ##SBATCH --partition=gpu_h100
-#SBATCH --time=0-01:00:00
+#SBATCH --time=0-03:00:00
 #SBATCH --mem=32GB
 #SBATCH --output=script_logging/slurm_%A.out
 #SBATCH --mail-type=END,FAIL                     # send email when job ends or fails
@@ -20,6 +20,8 @@ module load Python/3.11.3-GCCcore-12.3.0
 
 
 # srun python step_by_step.py --dataset_name aci --model_name catboost --target_label 0 --mu 0.5 --beta 0.1 --lambd 0.1 --epsilon 0.01 --exp_num 0
+
+# srun python clean_train.py --dataset aci --model catboost --method ohe
 
 
 

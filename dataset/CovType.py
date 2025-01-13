@@ -4,7 +4,7 @@ from typing import Tuple
 import numpy as np
 import pandas as pd
 from sklearn.model_selection import train_test_split
-from sklearn.preprocessing import OrdinalEncoder, StandardScaler
+from sklearn.preprocessing import OneHotEncoder, OrdinalEncoder, StandardScaler
 from sklearn.datasets import fetch_covtype
 import torch
 from torch.utils.data import DataLoader, TensorDataset
@@ -177,6 +177,64 @@ class CovType:
         else:
             return train_dataset, test_dataset
 
+
+
+    def get_normal_datasets_ohe(self, dataloader=False, batch_size=None, test_size=None, random_state=None):
+        """
+        Returns the datasets for training and testing. This method is the same as the previous method: get_normal_datasets, but with one difference:
+        before feeding the X_encoded to the train_test_split, we convert the categorical features to one-hot encoded features using OneHotEncoder.
+        """
+
+        if test_size is None:
+            test_size = self.test_size
+        if random_state is None:
+            random_state = self.random_state
+        if batch_size is None:
+            batch_size = self.batch_size
+
+        X_encoded_copy = self.X_encoded.copy()
+
+        # Convert the categorical features to one-hot encoded features using OneHotEncoder
+        onehot_encoder = OneHotEncoder(sparse_output=False)  # Ensure the output is a dense array
+        X_encoded_ohe = onehot_encoder.fit_transform(X_encoded_copy[self.cat_cols])
+
+        # Create a DataFrame from the one-hot encoded data
+        ohe_columns = onehot_encoder.get_feature_names_out(self.cat_cols)
+        X_encoded_ohe_df = pd.DataFrame(X_encoded_ohe, columns=ohe_columns, index=X_encoded_copy.index)
+
+        # Concatenate the one-hot encoded columns with the numerical columns
+        X_encoded_copy = pd.concat([X_encoded_ohe_df, X_encoded_copy[self.num_cols]], axis=1)
+
+        # Split the data into train and temporary sets (temporary set will be further split into validation and test)
+        X_train, X_test, y_train, y_test = train_test_split(X_encoded_copy, self.y, test_size=test_size, random_state=random_state, stratify=self.y)
+        
+        # Further split the temporary set into validation and test sets
+        # val_size_adjusted = self.val_size / (1 - test_size)  # Adjust validation size based on remaining data
+        # X_val, X_test, y_val, y_test = train_test_split(X_temp, y_temp, test_size=val_size_adjusted, random_state=random_state, stratify=y_temp)
+        
+        # Convert the data to PyTorch tensors
+        X_train_tensor = torch.tensor(X_train.values, dtype=torch.float32)
+        y_train_tensor = torch.tensor(y_train.values, dtype=torch.long)
+        # X_val_tensor = torch.tensor(X_val.values, dtype=torch.float32)
+        # y_val_tensor = torch.tensor(y_val.values, dtype=torch.long)
+        X_test_tensor = torch.tensor(X_test.values, dtype=torch.float32)
+        y_test_tensor = torch.tensor(y_test.values, dtype=torch.long)
+        
+        # Create TensorDatasets for each split
+        train_dataset = TensorDataset(X_train_tensor, y_train_tensor)
+        # val_dataset = TensorDataset(X_val_tensor, y_val_tensor)
+        test_dataset = TensorDataset(X_test_tensor, y_test_tensor)
+        
+        # Create DataLoader for each split
+        train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
+        # val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
+        test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
+        
+        # Return the Datasets for training and test sets
+        if dataloader:
+            return train_loader, test_loader
+        else:
+            return train_dataset, test_dataset
 
 
 
@@ -731,3 +789,10 @@ class CovType:
         else:
             
             return TensorDataset(X_reverted_tensor, y_tensor)
+
+
+
+
+# if __name__ == "__main__":
+#     dataset = CovType()
+#     train, test = dataset.get_normal_datasets_ohe()
