@@ -1,0 +1,5 @@
+EXP_NUM,METHOD,DATASET,MODEL,BA
+0,ordinal,higgs,xgboost,76.235
+0,ordinal,higgs,ftt,79.44645454545454
+0,ordinal,higgs,tabnet,77.85995454545454
+0,ordinal,higgs,saint,79.89968

@@ -111,6 +111,34 @@ class TabNetModel:
         return torch.tensor(proba)
     
 
+    def forward_embeddings(self, X: torch.Tensor) -> torch.Tensor:
+        """
+        Returns the penultimate-layer embeddings from TabNet, i.e., the final
+        representation produced by self.model.network(...) before the classification head.
+
+        This can be used to perform tasks like Spectral Signature defense, where we need
+        hidden representations rather than final predictions.
+
+        Parameters:
+        X (torch.Tensor): Input tensor of shape [batch_size, n_features].
+
+        Returns:
+        torch.Tensor: Penultimate-layer representation of shape [batch_size, n_d].
+        """
+        # According to the PyTorch TabNet library, calling `self.model.network(...)`
+        # yields (output, M_loss) where 'output' is a [batch_size, n_d] representation
+        # (pre-classification), and M_loss is a mask loss not relevant here.
+
+        device = X.device
+        self.model.network.eval()
+        with torch.no_grad():
+            # Convert input to float if needed
+            # X_float = X.float()
+            output, _ = self.model.network(X)
+            # 'output' should be [batch_size, n_d], the final TabNet representation
+        return output.to(device)
+    
+
     def save_model(self, filepath):
         """
         Saves the trained TabNet model to the specified file path.

@@ -1,0 +1,5 @@
+EXP_NUM,METHOD,DATASET,MODEL,BA
+0,ordinal,credit_card,xgboost,99.95435553526913
+0,ordinal,credit_card,tabnet,99.87886661282961
+0,ordinal,credit_card,saint,99.94909
+0,ordinal,credit_card,ftt,99.95435553526913

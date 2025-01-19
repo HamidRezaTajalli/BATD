@@ -6,8 +6,8 @@
 #SBATCH --cpus-per-task=4
 #SBATCH --partition=gpu_a100
 ##SBATCH --partition=gpu_h100
-#SBATCH --time=0-03:00:00
-#SBATCH --mem=32GB
+#SBATCH --time=0-23:00:00
+#SBATCH --mem=64GB
 #SBATCH --output=script_logging/slurm_%A.out
 #SBATCH --mail-type=END,FAIL                     # send email when job ends or fails
 #SBATCH --mail-user=hamidreza.tajalli@ru.nl      # email address
@@ -19,11 +19,11 @@ module load 2023
 module load Python/3.11.3-GCCcore-12.3.0
 
 
-# srun python step_by_step.py --dataset_name aci --model_name catboost --target_label 0 --mu 0.5 --beta 0.1 --lambd 0.1 --epsilon 0.01 --exp_num 0
+# srun python step_by_step.py --dataset_name kdd99 --model_name ftt --target_label 0 --mu 1.0 --beta 0.1 --lambd 0.1 --epsilon 0.01 --exp_num 0
 
-# srun python clean_train.py --dataset aci --model catboost --method ohe
+# srun python clean_train.py --dataset higgs --model saint --method ordinal
 
-
+# srun python train_and_test.py
 
 
 
@@ -54,3 +54,6 @@ module load Python/3.11.3-GCCcore-12.3.0
 
 # # dataset_name = ["topiocqa", "inscit", "qrecc"]
 # # query_format = ['original', 'human_rewritten', 'all_history', 'same_topic']
+
+
+# srun python step_by_step.py --dataset_name covtype --model_name saint --target_label 6 --mu 1.0 --beta 0.1 --lambd 0.1 --epsilon 0.1 --exp_num 0

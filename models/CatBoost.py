@@ -4,14 +4,13 @@ import torch.nn as nn
 from catboost import CatBoostClassifier
 
 # Define a fallback for the number of estimators
-n_estimators = 1000 if not os.getenv("CI", False) else 20
+# n_estimators = 1000 if not os.getenv("CI", False) else 20
 
 class CatBoostModel:
     def __init__(self, 
                  objective="multi",
                  depth=8,
-                 learning_rate=0.1,
-                 n_estimators=n_estimators,
+                 learning_rate=0.05,
                  random_seed=0,
                  l2_leaf_reg=3.0,
                  subsample=None,
@@ -62,7 +61,7 @@ class CatBoostModel:
         self.objective = objective
         self.depth = depth
         self.learning_rate = learning_rate
-        self.n_estimators = n_estimators
+        self.n_iterations = 1500
         self.random_seed = random_seed
         self.l2_leaf_reg = l2_leaf_reg
         self.subsample = subsample
@@ -82,7 +81,7 @@ class CatBoostModel:
             loss_function=catboost_objective,
             depth=self.depth,
             learning_rate=self.learning_rate,
-            iterations=self.n_estimators,
+            iterations=self.n_iterations,
             random_seed=self.random_seed,
             l2_leaf_reg=self.l2_leaf_reg,
             subsample=self.subsample,
@@ -120,7 +119,6 @@ class CatBoostModel:
             y_train, 
             X_valid=None, 
             y_valid=None, 
-            early_stopping=40, 
             verbose=10):
         """
         Trains the CatBoost model using the provided training data.
@@ -145,7 +143,6 @@ class CatBoostModel:
             X_train,
             y_train,
             eval_set=eval_set,
-            early_stopping_rounds=early_stopping,
             verbose=verbose
         )
 

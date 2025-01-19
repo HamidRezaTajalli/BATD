@@ -1,0 +1,5 @@
+EXP_NUM,METHOD,DATASET,MODEL,BA
+0,ordinal,diabetes,tabnet,60.3896103896104
+0,ordinal,diabetes,xgboost,73.37662337662337
+0,ordinal,diabetes,saint,74.02598
+0,ordinal,diabetes,ftt,75.97402597402598

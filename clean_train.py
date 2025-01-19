@@ -28,6 +28,13 @@ def clean_train(dataset_name, model_name, method):
         if dataset_name in ['credit_card', 'diabetes', 'higgs']:
             exit()
 
+    # log the settings 
+    print("--------------------------------")
+    print('################################')
+    print(f"training with dataset: {dataset_name}, model: {model_name}, method: {method}")
+    print('################################')
+    print("--------------------------------")
+
     # SAINT and FTT need to be trained with is_numerical value set correctly depending on chosen dataset and method
     is_numerical = False
     if dataset_name in ['credit_card', 'diabetes', 'higgs']:
@@ -85,6 +92,18 @@ def clean_train(dataset_name, model_name, method):
     }
 
     data_obj = dataset_dict[dataset_name]()
+
+    if method == "ohe":
+        dataset = data_obj.get_normal_datasets_ohe()
+    elif method == "ordinal":
+        if model_name == "ftt" and dataset_name not in ["higgs", "diabetes", "credit_card"]:
+            dataset = data_obj.get_normal_datasets_FTT()
+        else:
+            dataset = data_obj.get_normal_datasets()
+    elif method == "converted":
+        dataset = data_obj.get_converted_dataset()
+
+    train_dataset, val_dataset = dataset
     
 
     if model_name == "ftt":
@@ -109,14 +128,6 @@ def clean_train(dataset_name, model_name, method):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model.to(device)
 
-    if method == "ohe":
-        dataset = data_obj.get_normal_datasets_ohe()
-    elif method == "ordinal":
-        dataset = data_obj.get_normal_datasets()
-    elif method == "converted":
-        dataset = data_obj.get_converted_dataset()
-
-    train_dataset, val_dataset = dataset
 
 
 #################################################

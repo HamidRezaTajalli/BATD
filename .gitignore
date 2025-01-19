@@ -184,3 +184,12 @@ saved_models/
 
 # everything in catboost_info directory
 catboost_info/
+
+
+# everything in script_logging directory
+script_logging/
+
+# everything in job_executer_files directory
+job_executer_files/
+
+

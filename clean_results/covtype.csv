@@ -1,0 +1,14 @@
+EXP_NUM,METHOD,DATASET,MODEL,BA
+0,ohe,covtype,xgboost,96.49922979613264
+0,ohe,covtype,saint,96.85378
+0,ohe,covtype,ftt,96.17565811553919
+0,ohe,covtype,tabnet,94.87534745230329
+0,converted,covtype,tabnet,94.4820701703054
+0,converted,covtype,xgboost,96.51041711487656
+0,converted,covtype,ftt,96.11627926989837
+0,converted,covtype,saint,96.7531
+0,ordinal,covtype,tabnet,94.56296309045378
+0,ordinal,covtype,saint,96.946724
+0,ordinal,covtype,ftt,96.30216087364354
+0,ordinal,covtype,xgboost,96.51041711487656
+

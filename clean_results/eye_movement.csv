@@ -1,0 +1,13 @@
+EXP_NUM,METHOD,DATASET,MODEL,BA
+0,ohe,eye_movement,tabnet,57.17550274223034
+0,ohe,eye_movement,xgboost,72.71480804387569
+0,ohe,eye_movement,ftt,60.42047531992687
+0,ohe,eye_movement,saint,70.06399
+0,converted,eye_movement,tabnet,61.10603290676416
+0,converted,eye_movement,xgboost,71.75502742230347
+0,converted,eye_movement,ftt,60.96892138939671
+0,converted,eye_movement,saint,70.38391
+0,ordinal,eye_movement,xgboost,71.75502742230347
+0,ordinal,eye_movement,tabnet,56.39853747714808
+0,ordinal,eye_movement,saint,68.510056
+0,ordinal,eye_movement,ftt,60.28336380255942

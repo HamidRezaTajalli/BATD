@@ -196,6 +196,10 @@ class EyeMovement:
         # Concatenate the one-hot encoded columns with the numerical columns
         X_encoded_copy = pd.concat([X_encoded_ohe_df, X_encoded_copy[self.num_cols]], axis=1)
 
+        # Now that X_encoded_copy is extended in its length, we need to update the feature_names
+        self.feature_names = X_encoded_copy.columns.tolist()
+
+
         # Split the data into train and temporary sets (temporary set will be further split into validation and test)
         X_train, X_test, y_train, y_test = train_test_split(X_encoded_copy, self.y, test_size=test_size, random_state=random_state, stratify=self.y)
         
@@ -788,4 +792,6 @@ class EyeMovement:
 
 # if __name__ == "__main__":
 #     eye_movement = EyeMovement()
-#     train, test = eye_movement.get_normal_datasets_ohe()
+#     y = eye_movement.y
+#     # print distinct values of y
+#     print(np.unique(y))

@@ -318,6 +318,10 @@ class KDD99:
         # Concatenate the one-hot encoded columns with the numerical columns
         X_encoded_copy = pd.concat([X_encoded_ohe_df, X_encoded_copy[self.num_cols]], axis=1)
 
+
+        # Now that X_encoded_copy is extended in its length, we need to update the feature_names
+        self.feature_names = X_encoded_copy.columns.tolist()
+
         # Split the data into train and temporary sets (temporary set will be further split into validation and test)
         X_train, X_test, y_train, y_test = train_test_split(X_encoded_copy, self.y, test_size=test_size, random_state=random_state, stratify=self.y)
         
@@ -905,5 +909,10 @@ class KDD99:
 
 # if __name__ == "__main__":
 #     kdd99 = KDD99()
-#     train, test = kdd99.get_normal_datasets_ohe()
+#     y = kdd99.y
+#     # print distinct values of y
+#     print(np.unique(y))
+
+
+
 

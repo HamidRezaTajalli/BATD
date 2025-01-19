@@ -39,6 +39,7 @@ class HIGGS:
 
         self.column_idx = {col: idx for idx, col in enumerate(self.feature_names)}
         self.num_cols_idx = [self.column_idx[col] for col in self.num_cols]
+        self.FTT_n_categories = ()
 
         # Store original dataset for reference
         self.X_original = X.astype(float).copy()
@@ -92,11 +93,11 @@ class HIGGS:
         # X_val, X_test, y_val, y_test = train_test_split(X_temp, y_temp, test_size=val_size_adjusted, random_state=random_state, stratify=y_temp)
         
         # Convert the data to PyTorch tensors
-        X_train_tensor = torch.tensor(X_train.values, dtype=torch.float64)
+        X_train_tensor = torch.tensor(X_train.values, dtype=torch.float32)
         y_train_tensor = torch.tensor(y_train.values, dtype=torch.long)
-        # X_val_tensor = torch.tensor(X_val.values, dtype=torch.float64)
+        # X_val_tensor = torch.tensor(X_val.values, dtype=torch.float32)
         # y_val_tensor = torch.tensor(y_val.values, dtype=torch.long)
-        X_test_tensor = torch.tensor(X_test.values, dtype=torch.float64)
+        X_test_tensor = torch.tensor(X_test.values, dtype=torch.float32)
         y_test_tensor = torch.tensor(y_test.values, dtype=torch.long)
         
         # Create TensorDatasets for each split
