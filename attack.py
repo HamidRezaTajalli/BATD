@@ -49,7 +49,7 @@ class Attack:
 
     """
     
-    def __init__(self, device, model, data_obj, target_label=1, mu=0.2, beta=0.1, lambd=0.1):
+    def __init__(self, device, model, data_obj, target_label, mu, beta, lambd, epsilon):
         """
         Initializes the class for performing a backdoor attack on a model.
 
@@ -98,6 +98,7 @@ class Attack:
         # Set regularization hyperparameters
         self.beta = beta
         self.lambd = lambd
+        self.epsilon = epsilon
 
          # Initialize the poisoned dataset and samples as None
         self.poisoned_dataset = (None, None)
@@ -592,7 +593,6 @@ class Attack:
             poisoned_samples (TensorDataset): The set of poisoned samples.
         """
 
-        self.epsilon = epsilon
 
         if self.D_picked is None:
             raise ValueError("D_picked is not initialized. Please run confidence_based_sample_ranking() first.")

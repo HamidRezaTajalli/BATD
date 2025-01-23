@@ -716,3 +716,49 @@ class SAINTModel:
 
 
 
+
+
+
+    def forward_reps(self, X: torch.Tensor) -> torch.Tensor:
+        """
+        Returns logits for the input features
+        """
+
+        # Create a mask for non-NaN values (1 for valid values, 0 for NaN)
+        X_mask = (~X.isnan()).int()
+
+
+        # Separate categorical and continuous columns
+        X_categ = X[:, self.cat_idxs]
+        X_cont = X[:, self.con_idxs]
+
+        # Separate the masks for categorical and continuous columns
+        X_categ_mask = X_mask[:, self.cat_idxs]
+        X_cont_mask = X_mask[:, self.con_idxs]
+
+        # Add a "CLS" token (0) as the first column of X_categ
+        cls_token = torch.zeros((X_categ.size(0), 1), device=X.device)
+        X_categ = torch.cat([cls_token, X_categ], dim=1)
+
+        # Add a "CLS" mask (1) as the first column of X_categ_mask
+        cls_mask = torch.ones((X_categ_mask.size(0), 1), device=X.device)
+        X_categ_mask = torch.cat([cls_mask, X_categ_mask], dim=1)
+
+        # Convert to appropriate dtypes
+        X_categ = X_categ.long()
+        X_cont = X_cont.float()
+        X_categ_mask = X_categ_mask.long()
+        X_cont_mask = X_cont_mask.long()
+
+        # Forward pass
+        self.model.eval()
+        with torch.no_grad():
+            _, X_categ_enc, X_cont_enc = embed_data_mask(
+                X_categ, X_cont, X_categ_mask, X_cont_mask, self.model
+            )
+            reps = self.model.transformer(X_categ_enc, X_cont_enc)
+            # y_reps = reps[:, 0, :]       # Take [CLS] token representation
+            # y_outs = self.model.mlpfory(y_reps)
+
+        return reps
+

@@ -21,7 +21,7 @@ beta = 0.1
 lambd = 0.1
 num_exp = 1
 exp_num_list = range(0, num_exp)
-target_labels = [0]
+target_labels = [5]
 
 
 

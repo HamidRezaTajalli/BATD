@@ -4,6 +4,7 @@ from tab_transformer_pytorch import FTTransformer
 from sklearn.metrics import classification_report, confusion_matrix
 from torch.utils.data import DataLoader
 import numpy as np
+from einops import rearrange, repeat
 
 
 
@@ -426,6 +427,87 @@ class FTTModel:
 
         proba = self.model_converted(X_c, X_n)
         return proba
+    
+    def forward_embeddings(self, X_c: torch.Tensor, X_n: torch.Tensor) -> torch.Tensor:
+        """
+        Returns the penultimate representation from FTTransformer by replicating the
+        forward pass but skipping the final linear layer in `ftt_model.to_logits`.
+
+        Steps:
+        1) Embedding of categorical (X_c) and continuous (X_n) features.
+        2) Concatenation + prepend CLS token.
+        3) Transformer forward pass.
+        4) Take the CLS token representation (x[:, 0, :]).
+        5) Apply the first two layers of `ftt_model.to_logits` (LayerNorm + ReLU),
+            but skip the final linear layer. This yields the penultimate embedding.
+        
+        Args:
+        ftt_model (FTTransformer): A trained FTTransformer instance.
+        X_c (torch.Tensor): Categorical input of shape (B, num_categories).
+        X_n (torch.Tensor): Continuous input of shape (B, num_continuous).
+        
+        Returns:
+        torch.Tensor of shape (B, dim): The penultimate-layer representation.
+        """
+
+        x_categ = X_c
+        x_numer = X_n
+
+        assert x_categ.shape[-1] == self.model_original.num_categories, f'you must pass in {self.model_original.num_categories} values for your categories input'
+
+        xs = []
+        if self.model_original.num_unique_categories > 0:
+            x_categ = x_categ + self.model_original.categories_offset
+
+            x_categ = self.model_original.categorical_embeds(x_categ)
+
+            xs.append(x_categ)
+
+        # add numerically embedded tokens
+        if self.model_original.num_continuous > 0:
+            x_numer = self.model_original.numerical_embedder(x_numer)
+
+            xs.append(x_numer)
+
+        # concat categorical and numerical
+
+        x = torch.cat(xs, dim = 1)
+
+        # append cls tokens
+        b = x.shape[0]
+        cls_tokens = repeat(self.model_original.cls_token, '1 1 d -> b 1 d', b = b)
+        x = torch.cat((cls_tokens, x), dim = 1)
+
+        # attend
+
+        x, attns = self.model_original.transformer(x, return_attn = True)
+
+        # get cls token
+
+        x = x[:, 0]
+
+        # ---------------------------------------------------------------
+        # 5) Penultimate representation: skip the final linear,
+        #    but replicate LN -> ReLU from to_logits if you want.
+        # ---------------------------------------------------------------
+        # ftt_model.to_logits = nn.Sequential(
+        #     nn.LayerNorm(dim),
+        #     nn.ReLU(),
+        #     nn.Linear(dim, dim_out)
+        # )
+        # 
+        # => The final linear is the last step. We apply LN + ReLU
+        #    for the penultimate representation.
+
+        # The first two layers: [0] = LayerNorm(dim), [1] = ReLU()
+        ln = self.model_original.to_logits[0]
+        act = self.model_original.to_logits[1]
+
+        # Apply LN + ReLU => shape (B, dim)
+        penultimate = act(ln(x))
+
+        # Return the penultimate embedding
+        return penultimate
         
     
 

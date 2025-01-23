@@ -56,4 +56,6 @@ module load Python/3.11.3-GCCcore-12.3.0
 # # query_format = ['original', 'human_rewritten', 'all_history', 'same_topic']
 
 
-# srun python step_by_step.py --dataset_name covtype --model_name saint --target_label 6 --mu 1.0 --beta 0.1 --lambd 0.1 --epsilon 0.1 --exp_num 0
+# srun python step_by_step.py --dataset_name covtype --model_name xgboost --target_label 4 --mu 0.2 --beta 0.1 --lambd 0.1 --epsilon 0.02 --exp_num 0
+
+# srun python ss.py --dataset_name aci --model_name saint --target_label 0 --mu 1.0 --beta 0.1 --lambd 0.1 --epsilon 0.02 --exp_num 0

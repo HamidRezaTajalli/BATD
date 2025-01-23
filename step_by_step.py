@@ -163,7 +163,7 @@ def attack_step_by_step(args, use_saved_models, use_existing_trigger):
 
 
     # Step 3: Initialize the Attack class with model, data, and target label
-    attack = Attack(device=device, model=model, data_obj=data_obj, target_label=target_label, mu=mu, beta=beta, lambd=lambd)
+    attack = Attack(device=device, model=model, data_obj=data_obj, target_label=target_label, mu=mu, beta=beta, lambd=lambd, epsilon=epsilon)
 
     # Step 4: Train the model on the clean training dataset if the already trained model is not to be used.
     if not use_saved_models['clean']:
@@ -212,7 +212,7 @@ def attack_step_by_step(args, use_saved_models, use_existing_trigger):
 
 
     # Step 10: Construct the poisoned dataset
-
+    
     poisoned_trainset, poisoned_train_samples = attack.construct_poisoned_dataset(attack.converted_dataset[0], epsilon=epsilon)
     poisoned_testset, poisoned_test_samples = attack.construct_poisoned_dataset(attack.converted_dataset[1], epsilon=1)
     attack.poisoned_dataset = (poisoned_trainset, poisoned_testset)
@@ -282,7 +282,10 @@ def attack_step_by_step(args, use_saved_models, use_existing_trigger):
     poisoned_model_address = poisoned_model_path / Path(f"{model_name}_{data_obj.dataset_name}_{target_label}_{mu}_{beta}_{lambd}_{epsilon}_poisoned_model.pth")
 
     # Save the poisoned model with Unix timestamp in the filename
-    attack.model.save_model(poisoned_model_address)
+    if model_name == "ftt":
+        attack.model.save_model(poisoned_model_address, model_type="original")
+    else:
+        attack.model.save_model(poisoned_model_address)
 
 
 

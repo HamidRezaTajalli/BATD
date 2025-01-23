@@ -19,7 +19,7 @@ class EyeMovement:
     This class is used to load the Eye Movement dataset and convert it into a format suitable for training a model.
     """
 
-    def __init__(self, test_size=0.2, random_state=42, batch_size=64):
+    def __init__(self, test_size=0.2, random_state=None, batch_size=64):
         self.dataset_name = "eye_movement"
         self.num_classes = 3        
 
