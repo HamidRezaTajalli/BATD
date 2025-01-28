@@ -1,46 +1,37 @@
-import unittest
-import torch
-import numpy as np
-from models.SAINT import SAINTModel  # Adjust the import path as necessary
 
-class TestSAINTModelForward(unittest.TestCase):
 
-    def setUp(self):
-        # Mock data object with necessary attributes
-        self.data_obj = type('DataObject', (object,), {
-            'num_classes': 3,
-            'feature_names': ['feature1', 'feature2', 'feature3'],
-            'cat_cols': [0, 1],
-            'cat_cols_idx': [0, 1],
-            'num_cols_idx': [2],
-            'FTT_n_categories': [3, 4]
-        })()
 
-        # Initialize the model
-        self.model = SAINTModel(self.data_obj)
 
-    def test_forward(self):
-        # Create a mock input tensor with batch size 5 and 3 features
-        X = torch.tensor([
-            [1, 2, 0.5],
-            [0, 1, 0.3],
-            [2, 3, 0.7],
-            [1, 0, 0.2],
-            [0, 2, 0.6]
-        ], dtype=torch.float32)
+import pandas as pd
 
-        # Run the forward method
-        output = self.model.forward(X)
+# Load the CSV file
+file_path = '/home/htajalli/prjs0962/repos/BATD/results/eye_movement_extended.csv'
+data = pd.read_csv(file_path)
 
-        # Check the output shape
-        expected_shape = (5, self.data_obj.num_classes)  # Assuming output is logits for each class
-        self.assertEqual(output.shape, expected_shape, "Output shape mismatch")
+# Define the grouping columns
+grouping_columns = ['DATASET', 'MODEL', 'TARGET_LABEL', 'EPSILON', 'MU', 'BETA', 'LAMBDA']
 
-        # Check the output type
-        self.assertIsInstance(output, torch.Tensor, "Output is not a torch.Tensor")
+# Calculate average CDA and ASR for each group
+grouped = (
+    data.groupby(grouping_columns, as_index=False)
+    .filter(lambda x: set(range(5)).issubset(x['EXP_NUM'].unique()))
+    .groupby(grouping_columns)
+    .agg({'CDA': 'mean', 'ASR': 'mean'})
+    .reset_index()
+)
 
-        # Check if the output contains finite values
-        self.assertTrue(torch.isfinite(output).all(), "Output contains non-finite values")
+# Merge the averaged values back to the original data
+merged = data.merge(grouped, on=grouping_columns, suffixes=('', '_avg'))
 
-if __name__ == '__main__':
-    unittest.main()
+# Replace CDA and ASR with their averaged values in relevant rows
+merged.loc[:, 'CDA'] = merged['CDA_avg']
+merged.loc[:, 'ASR'] = merged['ASR_avg']
+
+# Keep only rows with EXP_NUM = 0 and drop auxiliary columns
+result = merged[merged['EXP_NUM'] == 0].drop(columns=['CDA_avg', 'ASR_avg'])
+
+# Save the result to a new CSV file
+output_file_path = '/home/htajalli/prjs0962/repos/BATD/results/processed_eye_movement_extended.csv'
+result.to_csv(output_file_path, index=False)
+
+print(f"Processed file saved to {output_file_path}")
