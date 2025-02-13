@@ -282,7 +282,7 @@ def attack_step_by_step(args, use_saved_models, use_existing_trigger):
     poisoned_model_address = poisoned_model_path / Path(f"{model_name}_{data_obj.dataset_name}_{target_label}_{mu}_{beta}_{lambd}_{epsilon}_poisoned_model.pth")
 
     # Save the poisoned model with Unix timestamp in the filename
-    if model_name == "ftt":
+    if model_name == "ftt" and data_obj.cat_cols:
         attack.model.save_model(poisoned_model_address, model_type="original")
     else:
         attack.model.save_model(poisoned_model_address)

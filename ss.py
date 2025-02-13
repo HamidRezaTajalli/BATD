@@ -149,6 +149,7 @@ def extract_features_saint(
 def extract_features_fttransformer(
     ft_model,
     dataset,
+    data_obj,
     batch_size: int = 128,
     device: torch.device = None
 ) -> np.ndarray:
@@ -161,7 +162,7 @@ def extract_features_fttransformer(
     if device is None:
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    ft_model.to(device)
+    ft_model.to(device, model_type="original")
     ft_model.eval()
 
 
@@ -170,11 +171,19 @@ def extract_features_fttransformer(
 
     all_features = []
     with torch.no_grad():
-        for batch_c, batch_n, _ in loader:
-            batch_c = batch_c.to(device)
-            batch_n = batch_n.to(device)
-            feats = ft_model.forward_embeddings(batch_c, batch_n)
-            all_features.append(feats.cpu().numpy())
+        if data_obj.cat_cols:
+            for batch_c, batch_n, _ in loader:
+                batch_c = batch_c.to(device)
+                batch_n = batch_n.to(device)
+                feats = ft_model.forward_embeddings(batch_c, batch_n)
+                all_features.append(feats.cpu().numpy())
+        else:
+            for batch_n, _ in loader:
+                batch_n = batch_n.to(device)
+                batch_c = torch.empty(batch_n.shape[0], 0, dtype=torch.long)
+                batch_c = batch_c.to(device)
+                feats = ft_model.forward_embeddings(batch_c, batch_n)
+                all_features.append(feats.cpu().numpy())
 
     return np.concatenate(all_features, axis=0)
 
@@ -246,6 +255,62 @@ def spectral_signature_defense(
 ###############################################################################
 # 4. Plot Correlation Scores
 ###############################################################################
+# def plotCorrelationScores(
+#     class_id: int,
+#     scores_for_class: np.ndarray,
+#     mask_for_class: np.ndarray,
+#     nbins: int = 100,
+#     label_clean: str = "Clean",
+#     label_poison: str = "Poisoned",
+#     save_path: Path = None
+# ):
+#     """
+#     Plots a histogram of the correlation (spectral) scores for clean vs. poisoned
+#     or suspicious samples in a single class.
+
+#     Args:
+#       - class_id (int): The class label for the plot title
+#       - scores_for_class (np.ndarray): Array of shape (N_class_samples,) with the spectral scores
+#       - mask_for_class (np.ndarray): Boolean array of same shape, True means "poisoned" or "suspicious"
+#       - nbins (int): Number of bins for the histogram
+#       - label_clean (str): Legend label for clean distribution
+#       - label_poison (str): Legend label for poison distribution
+#     """
+#     plt.figure(figsize=(5,3))
+#     sns.set_style("white")
+#     sns.set_palette("tab10")
+
+#     scores_clean = scores_for_class[~mask_for_class]
+#     scores_poison = scores_for_class[mask_for_class]
+
+#     if len(scores_poison) == 0:
+#         # No poison => just plot clean
+#         if len(scores_clean) == 0:
+#             return  # no data
+#         bins = np.linspace(0, scores_clean.max(), nbins)
+#         plt.hist(scores_clean, bins=bins, color="green", alpha=0.75, label=label_clean)
+#     else:
+#         # We have both categories
+#         combined_max = max(scores_clean.max(), scores_poison.max())
+#         bins = np.linspace(0, combined_max, nbins)
+#         plt.hist(scores_clean, bins=bins, color="green", alpha=0.75, label=label_clean)
+#         plt.hist(scores_poison, bins=bins, color="red", alpha=0.75, label=label_poison)
+#         plt.legend(loc="upper right")
+
+#     plt.xlabel("Spectral Signature Score")
+#     plt.ylabel("Count")
+#     plt.title(f"Class {class_id}: Score Distribution")
+#     plt.show()
+#     # save the plot
+#     if save_path is not None:
+#         plt.savefig(save_path)
+#     else:
+#         plt.savefig(f"plots/ss_class_{class_id}.png")
+
+
+###############################################################################
+# 4. Plot Correlation Scores
+###############################################################################
 def plotCorrelationScores(
     class_id: int,
     scores_for_class: np.ndarray,
@@ -267,7 +332,7 @@ def plotCorrelationScores(
       - label_clean (str): Legend label for clean distribution
       - label_poison (str): Legend label for poison distribution
     """
-    plt.figure(figsize=(5,3))
+    plt.figure(figsize=(10, 6))  # Increase figure size for better readability
     sns.set_style("white")
     sns.set_palette("tab10")
 
@@ -288,16 +353,18 @@ def plotCorrelationScores(
         plt.hist(scores_poison, bins=bins, color="red", alpha=0.75, label=label_poison)
         plt.legend(loc="upper right")
 
-    plt.xlabel("Spectral Signature Score")
-    plt.ylabel("Count")
-    plt.title(f"Class {class_id}: Score Distribution")
+    plt.xlabel("Spectral Signature Score", fontsize=12)  # Increase font size
+    plt.ylabel("Count", fontsize=12)  # Increase font size
+    plt.title(f"Class {class_id}: Score Distribution", fontsize=14)  # Increase font size
+    plt.xticks(rotation=45)  # Rotate x-axis ticks to prevent overlap
+    plt.tight_layout()  # Adjust layout to prevent clipping of labels
     plt.show()
-    # save the plot
+    
+    # Save the plot
     if save_path is not None:
         plt.savefig(save_path)
     else:
         plt.savefig(f"plots/ss_class_{class_id}.png")
-
 
 ###############################################################################
 # 5. Main function
@@ -432,7 +499,7 @@ if __name__ == "__main__":
     elif model_name == "saint":
         model = SAINTModel(data_obj=data_obj, is_numerical=False)
 
-    if model_name == "ftt":
+    if model_name == "ftt" and data_obj.cat_cols:
         model.load_model(poisoned_model_address_toload, model_type="original")
     else:
         model.load_model(poisoned_model_address_toload)
@@ -489,7 +556,7 @@ if __name__ == "__main__":
 
 
     if model_name == "ftt":
-        features = extract_features_fttransformer(model, reverted_poisoned_trainset, batch_size=128, device=device)
+        features = extract_features_fttransformer(model, reverted_poisoned_trainset, data_obj, batch_size=128, device=device)
     elif model_name == "tabnet":
         features = extract_features_tabnet(model, reverted_poisoned_trainset, batch_size=128, device=device)
     elif model_name == "saint":

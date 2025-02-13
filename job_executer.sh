@@ -3,10 +3,10 @@
 #SBATCH --ntasks=1
 #SBATCH --ntasks-per-node=1 
 #SBATCH --gpus=1
-#SBATCH --cpus-per-task=4
+#SBATCH --cpus-per-task=8
 #SBATCH --partition=gpu_a100
 ##SBATCH --partition=gpu_h100
-#SBATCH --time=0-23:00:00
+#SBATCH --time=0-00:05:00
 #SBATCH --mem=64GB
 #SBATCH --output=script_logging/slurm_%A.out
 #SBATCH --mail-type=END,FAIL                     # send email when job ends or fails
@@ -56,6 +56,6 @@ module load Python/3.11.3-GCCcore-12.3.0
 # # query_format = ['original', 'human_rewritten', 'all_history', 'same_topic']
 
 
-# srun python step_by_step.py --dataset_name covtype --model_name xgboost --target_label 4 --mu 0.2 --beta 0.1 --lambd 0.1 --epsilon 0.02 --exp_num 0
+# srun python step_by_step.py --dataset_name covtype --model_name ftt --target_label 5 --mu 1.0 --beta 0.1 --lambd 0.1 --epsilon 0.01 --exp_num 0
 
-# srun python ss.py --dataset_name aci --model_name saint --target_label 0 --mu 1.0 --beta 0.1 --lambd 0.1 --epsilon 0.02 --exp_num 0
+# srun python ss.py --dataset_name eye_movement --model_name ftt --target_label 1 --mu 0.5 --beta 0.1 --lambd 0.1 --epsilon 0.05 --exp_num 0

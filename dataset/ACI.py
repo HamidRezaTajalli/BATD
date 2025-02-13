@@ -775,5 +775,20 @@ class ACI:
 
 
 # if __name__ == "__main__":
+
 #     aci = ACI()
+
+#     # Print the total number of samples in the dataset
+#     print(f"Total number of samples in the dataset: {len(aci.X_original)}")
+
+#     # Use np.unique to count the number of samples in each class
+#     unique, counts = np.unique(aci.y, return_counts=True)
+#     class_counts = dict(zip(unique, counts))
+#     print(f"Number of samples in each class: {class_counts}")
+
+#     # Print the number of numerical features
+#     print(f"Number of numerical features: {len(aci.num_cols)}")
+
+#     # Print the number of categorical features
+#     print(f"Number of categorical features: {len(aci.cat_cols)}")
 
