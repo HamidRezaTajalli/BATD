@@ -398,14 +398,14 @@ class PrunedFinalMappingTabNet(nn.Module):
     def __init__(self, tabnet_block, pruning_mask):
         super().__init__()
         # tabnet_block is an instance of TabNetNoEmbeddings
-        self.tabnet_block = tabnet_block
+        self.final_mapping = tabnet_block.final_mapping
         self.pruning_mask = nn.Parameter(pruning_mask, requires_grad=False)
 
     def forward(self, res):
         
         # apply mask
         res = res * self.pruning_mask
-        out = self.tabnet_block.final_mapping(res)
+        out = self.final_mapping(res)
         return out
 
 
@@ -626,6 +626,12 @@ if __name__ == "__main__":
         pruned_mlpfory = Pruned_mlpfory_saint(mask, model.model.mlpfory)
         model.model.mlpfory = pruned_mlpfory
         model.opt.epochs = 5
+
+        for name, param in model.model.named_parameters():
+            if "mlpfory.mlpfory.layers.2" in name:
+                param.requires_grad = True
+            else:
+                param.requires_grad = False
     
     elif model_name == "ftt":
 
@@ -655,6 +661,41 @@ if __name__ == "__main__":
         else: 
             model.model_converted.to_logits = PrunedToLogitsFTT(model.model_converted.to_logits, mask)
         model.epochs = 5
+
+        model_to_freeze = model.model_original if data_obj.cat_cols else model.model_converted
+        for name, param in model_to_freeze.named_parameters():
+            if "to_logits.linear" in name:
+                param.requires_grad = True
+            else:
+                param.requires_grad = False
+
+    elif model_name == "tabnet":
+
+        # Step 1: get penultimate features
+        penultimate_acts = get_tabnet_penultimate_features(model.model, clean_trainset, device=device)
+        print("Penultimate shape:", penultimate_acts.shape)
+
+
+        # Step 2: average activation + prune
+        mean_acts = compute_average_activations_tabnet(penultimate_acts)
+        prune_inds = get_prune_indices_tabnet(mean_acts, prune_rate)
+        mask = create_pruning_mask_tabnet(mean_acts.shape[0], prune_inds, device)
+        print(f"Pruning {len(prune_inds)}/{mean_acts.shape[0]} dims ({100*prune_rate}%).")
+
+        # Step 3: inject mask
+        old_tabnet_block = model.model.network.tabnet
+        pruned_final_mapping = PrunedFinalMappingTabNet(old_tabnet_block, mask)
+        model.model.network.tabnet.final_mapping = pruned_final_mapping
+        model.max_epochs = 5
+
+        for name, param in model.model.network.named_parameters():
+            if "tabnet.final_mapping.final_mapping.weight" in name:
+                param.requires_grad = True
+            else:
+                param.requires_grad = False
+
+    else:
+        raise ValueError(f"Model {model_name} is not supported for pruning.")
 
         
         

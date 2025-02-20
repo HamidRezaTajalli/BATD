@@ -29,6 +29,8 @@ class TabNetModel:
         self.momentum = momentum
         self.mask_type = mask_type
 
+        self.max_epochs = 65
+
 
 
         # Initialize the TabNet model
@@ -65,7 +67,7 @@ class TabNetModel:
         """
         return self.model
 
-    def fit(self, X_train, y_train, X_valid=None, y_valid=None, max_epochs=65, patience=65, batch_size=1024, virtual_batch_size=128):
+    def fit(self, X_train, y_train, X_valid=None, y_valid=None, max_epochs=None, patience=65, batch_size=1024, virtual_batch_size=128):
         """
         Trains the TabNet model using the provided training data.
         
@@ -82,6 +84,10 @@ class TabNetModel:
         Returns:
         None
         """
+
+        if max_epochs is None:
+            max_epochs = self.max_epochs
+
         # Train the model
         self.model.fit(
             X_train=X_train, y_train=y_train,
