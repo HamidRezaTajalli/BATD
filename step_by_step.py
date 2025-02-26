@@ -158,7 +158,9 @@ def attack_step_by_step(args, use_saved_models, use_existing_trigger):
             use_saved_models['clean'] = False
 
 
-
+    if model_name == "ftt" and data_obj.cat_cols:
+        model.to(device, model_type="original")
+ 
     model.to(device)
 
 

@@ -23,20 +23,11 @@ import numpy as np  # For numerical operations.
 #        PARAMETERS          #
 ##############################
 
-# Directory where the recovered mask CSV files are stored.
-RESULT_DIR = 'results_tabular_nc'
 
 # Filename template for the recovered mask files.
 # The template expects a type identifier (here, 'mask') and a label number.
 FILE_FILENAME_TEMPLATE = 'tabular_visualize_%s_label_%d.csv'
 
-# Number of features in the tabular dataset.
-NUM_FEATURES = 30  # Adjust this number based on your dataset.
-# For tabular data, the input shape is a 1D vector.
-INPUT_SHAPE = (NUM_FEATURES,)
-
-# Total number of classes in the model.
-NUM_CLASSES = 2  # Adjust this number according to your model.
 
 ##############################
 #      END PARAMETERS        #
@@ -91,7 +82,7 @@ def outlier_detection(l1_norm_list, idx_mapping):
     pass
 
 
-def analyze_pattern_norm_dist():
+def analyze_pattern_norm_dist(results_dir, num_classes):
     """
     Analyze the distribution of L1 norms of the recovered mask files.
     
@@ -105,10 +96,10 @@ def analyze_pattern_norm_dist():
     mask_list = []   # List to store each mask as a 1D numpy array.
     idx_mapping = {} # Map from label to index in mask_list.
 
-    for y_label in range(NUM_CLASSES):
+    for y_label in range(num_classes):
         # Construct the filename for the mask using the template.
         mask_filename = FILE_FILENAME_TEMPLATE % ('mask', y_label)
-        full_path = os.path.join(RESULT_DIR, mask_filename)
+        full_path = os.path.join(results_dir, mask_filename)
         if os.path.isfile(full_path):
             # Load the mask from the CSV file.
             mask = np.loadtxt(full_path, delimiter=",")
@@ -127,9 +118,9 @@ def analyze_pattern_norm_dist():
     pass
 
 
-if __name__ == '__main__':
-    print('%s start' % sys.argv[0])
-    start_time = time.time()
-    analyze_pattern_norm_dist()
-    elapsed_time = time.time() - start_time
-    print('elapsed time %.2f s' % elapsed_time)
+# if __name__ == '__main__':
+#     print('%s start' % sys.argv[0])
+#     start_time = time.time()
+#     analyze_pattern_norm_dist()
+#     elapsed_time = time.time() - start_time
+#     print('elapsed time %.2f s' % elapsed_time)

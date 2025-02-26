@@ -193,3 +193,5 @@ script_logging/
 job_executer_files/
 
 
+# everything in saved_nc_masks directory
+saved_nc_masks/

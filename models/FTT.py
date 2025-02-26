@@ -428,6 +428,10 @@ class FTTModel:
         proba = self.model_converted(X_c, X_n)
         return proba
     
+    def forward_original(self, X_c: torch.Tensor, X_n: torch.Tensor) -> torch.Tensor:
+        proba = self.model_original(X_c, X_n)
+        return proba
+    
     def forward_embeddings(self, X_c: torch.Tensor, X_n: torch.Tensor) -> torch.Tensor:
         """
         Returns the penultimate representation from FTTransformer by replicating the

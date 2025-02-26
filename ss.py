@@ -501,9 +501,10 @@ if __name__ == "__main__":
 
     if model_name == "ftt" and data_obj.cat_cols:
         model.load_model(poisoned_model_address_toload, model_type="original")
+        model.to(device, model_type="original")
     else:
         model.load_model(poisoned_model_address_toload)
-    model.to(device)
+        model.to(device)
 
 
     attack = Attack(device=device, model=model, data_obj=data_obj, target_label=target_label, mu=mu, beta=beta, lambd=lambd, epsilon=epsilon)

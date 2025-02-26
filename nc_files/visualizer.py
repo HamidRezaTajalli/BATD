@@ -165,6 +165,8 @@ class Visualizer:
         # (Optional) You could preallocate additional tensors here.
         # For tabular data, no upsampling is needed.
 
+        self.raw_input_flag = True
+
     # -----------------------------
     # Reset Optimizer (if needed)
     # -----------------------------
@@ -263,7 +265,7 @@ class Visualizer:
     # -----------------------------
     # Main Optimization Loop: visualize()
     # -----------------------------
-    def visualize(self, gen, y_target, pattern_init, mask_init):
+    def visualize(self, gen, y_target, pattern_init, mask_init, ftt):
         """
         Run the optimization to recover a trigger pattern and mask for tabular data.
         
@@ -273,7 +275,7 @@ class Visualizer:
             y_target (int): The target class label for which the trigger should force misclassification.
             pattern_init (np.array): Initial pattern as a 1D vector (num_features,).
             mask_init (np.array): Initial mask as a 1D vector (num_features,).
-        
+            ftt (bool): Whether the model is FTT or not. If True, instead of two: x-batch and y-batch, the dataloader will return 3 columns: x_cat, x_num, y
         Returns:
             If self.return_logs is True:
                 (pattern_best, mask_best, mask_raw, logs)
@@ -346,7 +348,12 @@ class Visualizer:
 
             # Iterate over mini-batches.
             for idx in range(self.mini_batch):
-                X_batch, _ = next(iter(gen))  # Expect X_batch of shape (batch_size, num_features)
+                if ftt:
+                    X_cat_batch, X_num_batch, Y_batch = next(iter(gen))  # Expect X_batch of shape (batch_size, num_features)
+                    # Now, we should concatenate X_cat_batch and X_num_batch and remember the index which we concatenated them, so we can split them later
+                    X_batch = torch.cat((X_cat_batch, X_num_batch), dim=1)
+                else:
+                    X_batch, Y_batch = next(iter(gen))  # Expect X_batch of shape (batch_size, num_features)
                 # Reverse preprocessing if needed (here, for 'raw', nothing happens).
                 if self.raw_input_flag:
                     input_raw_tensor = X_batch
@@ -377,7 +384,10 @@ class Visualizer:
                     Y_target = torch.from_numpy(np.array([y_target] * X_batch.shape[0])).long().to(self.device)
 
                 # Forward pass through the model.
-                output_tensor = self.model.forward(X_adv)
+                if ftt:
+                    output_tensor = self.model.forward_original(X_adv[:, :X_cat_batch.shape[1]].long(), X_adv[:, X_cat_batch.shape[1]:].float())
+                else:
+                    output_tensor = self.model.forward(X_adv)
                 # Compute softmax and predicted labels.
                 y_pred = F.softmax(output_tensor, dim=1)
                 indices = torch.argmax(y_pred, 1)
@@ -492,6 +502,6 @@ class Visualizer:
             pattern_best = pattern_best.data.cpu().numpy().squeeze()
 
         if self.return_logs:
-            return pattern_best, mask_best, mask_best, logs
+            return pattern_best, mask_best, logs
         else:
-            return pattern_best, mask_best, mask_best
+            return pattern_best, mask_best

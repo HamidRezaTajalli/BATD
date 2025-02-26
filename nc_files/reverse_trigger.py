@@ -23,7 +23,7 @@ import torch
 
 
 from torch.utils.data import DataLoader, TensorDataset
-from visualizer import Visualizer  # Our tabular version of Visualizer (see previous file)
+from .visualizer import Visualizer  # Our tabular version of Visualizer (see previous file)
 
 # ------------------------------------------------------------------------------
 # PARAMETERS (adjust these to your dataset and model)
@@ -94,7 +94,7 @@ def save_pattern(pattern, mask, y_target, results_dir):
 # ------------------------------------------------------------------------------
 # Reverse-Engineering and Visualization Routine
 # ------------------------------------------------------------------------------
-def tabular_visualize_label_scan(results_dir, num_features, num_classes, feature_min, feature_max, model, dataloader):
+def tabular_visualize_label_scan(results_dir, num_features, num_classes, feature_min, feature_max, model, dataloader, ftt):
     """
     Main routine to perform label scanning and reverse-engineering for tabular data.
     
@@ -154,7 +154,8 @@ def tabular_visualize_label_scan(results_dir, num_features, num_classes, feature
             gen=dataloader,
             y_target=y_target,
             pattern_init=np.random.random(input_shape),  # Random initialization for pattern.
-            mask_init=np.random.random(input_shape)        # Random initialization for mask.
+            mask_init=np.random.random(input_shape),        # Random initialization for mask.
+            ftt=ftt
         )
         # Save the recovered trigger.
         save_pattern(pattern, mask_upsample, y_target, results_dir)
@@ -166,14 +167,14 @@ def tabular_visualize_label_scan(results_dir, num_features, num_classes, feature
 # ------------------------------------------------------------------------------
 # Main Entry Point
 # ------------------------------------------------------------------------------
-def main():
-    """
-    Main entry point for reverse-engineering the trigger on tabular data.
-    """
-    start_time = time.time()
-    tabular_visualize_label_scan()
-    elapsed_time = time.time() - start_time
-    print('Elapsed time: %.2f s' % elapsed_time)
+# def main():
+#     """
+#     Main entry point for reverse-engineering the trigger on tabular data.
+#     """
+#     start_time = time.time()
+#     tabular_visualize_label_scan()
+#     elapsed_time = time.time() - start_time
+#     print('Elapsed time: %.2f s' % elapsed_time)
 
-if __name__ == '__main__':
-    main()
+# if __name__ == '__main__':
+#     main()

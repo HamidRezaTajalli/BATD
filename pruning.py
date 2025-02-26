@@ -473,7 +473,7 @@ if __name__ == "__main__":
 
     # log all the arguments before running the experiment
     print("-"*100)
-    logging.info(f"Defending with the following arguments: {args}")
+    logging.info(f"Pruning with the following arguments: {args}")
     print("-"*100)
     print("\n")
 
@@ -553,10 +553,11 @@ if __name__ == "__main__":
         model = SAINTModel(data_obj=data_obj, is_numerical=False)
 
     if model_name == "ftt" and data_obj.cat_cols:
-        model.load_model(poisoned_model_address_toload, model_type="original")
+        model.load_model(poisoned_model_address_toload, model_type="original")  
+        model.to(device, model_type="original")
     else:
         model.load_model(poisoned_model_address_toload)
-    model.to(device)
+        model.to(device)
 
 
     attack = Attack(device=device, model=model, data_obj=data_obj, target_label=target_label, mu=mu, beta=beta, lambd=lambd, epsilon=epsilon)
@@ -724,3 +725,5 @@ if __name__ == "__main__":
         attack.model.save_model(pruned_model_address)
 
 
+
+# TODO: add the csv saving file for saving the results. 
