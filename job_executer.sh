@@ -7,7 +7,7 @@
 #SBATCH --partition=gpu_a100
 ##SBATCH --partition=gpu_h100
 #SBATCH --time=0-01:59:00
-#SBATCH --mem=16GB
+#SBATCH --mem=32GB
 #SBATCH --output=script_logging/slurm_%A.out
 #SBATCH --mail-type=END,FAIL                     # send email when job ends or fails
 #SBATCH --mail-user=hamidreza.tajalli@ru.nl      # email address
@@ -24,13 +24,6 @@ module load Python/3.11.3-GCCcore-12.3.0
 # srun python clean_train.py --dataset higgs --model saint --method ordinal
 
 # srun python NC.py --dataset_name covtype --model_name ftt --target_label 0
-
-
-
-
-
-
-
 
 
 

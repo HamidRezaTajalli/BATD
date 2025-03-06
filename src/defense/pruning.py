@@ -1,4 +1,16 @@
 from pathlib import Path
+import sys
+import os
+import csv
+
+# Add the project root to the Python path
+# Get the absolute path of the current file
+current_file = Path(__file__).resolve()
+# Get the project root (two directories up from the current file)
+project_root = current_file.parent.parent.parent
+# Add the project root to sys.path
+sys.path.insert(0, str(project_root))
+
 import numpy as np
 import torch
 import torch.nn as nn
@@ -6,27 +18,27 @@ from torch.utils.data import Dataset, DataLoader
 import matplotlib.pyplot as plt
 import seaborn as sns
 import logging
-from attack import Attack
+from src.attack import Attack
 
 
 
 
 # importing all the models for this project
-from models.FTT import FTTModel
-from models.Tabnet import TabNetModel
-from models.SAINT import SAINTModel
-from models.CatBoost import CatBoostModel
-from models.XGBoost import XGBoostModel
+from src.models.FTT import FTTModel
+from src.models.Tabnet import TabNetModel
+from src.models.SAINT import SAINTModel
+from src.models.CatBoost import CatBoostModel
+from src.models.XGBoost import XGBoostModel
 
 # importing all the datasets for this project
-from dataset.BM import BankMarketing
-from dataset.ACI import ACI
-from dataset.HIGGS import HIGGS
-from dataset.Diabetes import Diabetes
-from dataset.Eye_Movement import EyeMovement
-from dataset.KDD99 import KDD99
-from dataset.CreditCard import CreditCard
-from dataset.CovType import CovType  # Importing the ConvertCovType class from CovType.py
+from src.dataset.BM import BankMarketing
+from src.dataset.ACI import ACI
+from src.dataset.HIGGS import HIGGS
+from src.dataset.Diabetes import Diabetes
+from src.dataset.Eye_Movement import EyeMovement
+from src.dataset.KDD99 import KDD99
+from src.dataset.CreditCard import CreditCard
+from src.dataset.CovType import CovType  # Importing the ConvertCovType class from CovType.py
 
 
 ###############################################################################
@@ -195,15 +207,26 @@ def get_cls_activations_ftt(
 
     activations_list = []
 
-    # Collect [CLS] embeddings with no gradients
-    with torch.no_grad():
-        for X_c, X_n, _ in loader:
-            X_c = X_c.to(device)
-            X_n = X_n.to(device)
+    if model_type == 'original':
 
-            # forward_clstokens outputs [batch_size, dim]
-            cls_embeddings = ftt_model.forward_clstokens(X_c, X_n)
-            activations_list.append(cls_embeddings.cpu())
+        # Collect [CLS] embeddings with no gradients
+        with torch.no_grad():
+            for X_c, X_n, _ in loader:
+                X_c = X_c.to(device)
+                X_n = X_n.to(device)
+
+                # forward_clstokens outputs [batch_size, dim]
+                cls_embeddings = ftt_model.forward_clstokens(X_c, X_n, model_type)
+                activations_list.append(cls_embeddings.cpu())
+    elif model_type == 'converted':
+        with torch.no_grad():
+            for X_n, _ in loader:
+                X_c =torch.empty(X_n.shape[0], 0, dtype=torch.long)
+                X_c, X_n = X_c.to(device), X_n.to(device)
+
+                # forward clstokens outputs [batch_size, dim]
+                cls_embeddings = ftt_model.forward_clstokens(X_c, X_n, model_type)
+                activations_list.append(cls_embeddings.cpu())
 
     # Concatenate -> shape [total_samples, dim]
     activations_all = torch.cat(activations_list, dim=0)
@@ -514,6 +537,21 @@ if __name__ == "__main__":
     data_obj = dataset_dict[dataset_name]()
 
 
+    # create the experiment results directory
+    results_path = Path("./results/pruning")
+    if not results_path.exists():
+        results_path.mkdir(parents=True, exist_ok=True)
+    csv_file_address = results_path / Path(f"{dataset_name}.csv")
+    if not csv_file_address.exists():
+        csv_file_address.touch()
+        
+        csv_header = ['EXP_NUM', 'DATASET', 'MODEL', 'TARGET_LABEL', 'EPSILON', 'PRUNE_RATE', 'MU', 'BETA', 'LAMBDA', 'P_CDA', 'P_ASR', 'FP_CDA', 'FP_ASR']
+        # insert the header row into the csv file
+        with open(csv_file_address, mode='w') as file:
+            writer = csv.writer(file)
+            writer.writerow(csv_header)
+
+
     models_path = Path("./saved_models")
 
     # creating and checking the path for saving and loading the poisoned models.
@@ -698,18 +736,29 @@ if __name__ == "__main__":
     else:
         raise ValueError(f"Model {model_name} is not supported for pruning.")
 
-        
-        
+
+    # test the pruned model on clean data and poisoned data
+    converted = False if FTT and data_obj.cat_cols else True    
+    p_asr = attack.test(reverted_poisoned_testset, converted=converted)
+    p_cda = attack.test(clean_testset, converted=converted)
+
+
     print("==> [Step 4] Fine-Tuning the pruned model on clean data...")
     #Train the model on the poisoned training dataset
-    converted = False if FTT and data_obj.cat_cols else True
+    
     attack.train(clean_dataset, converted=converted)
     logging.info("=== Fine-Tuning Completed ===")
 
     print("==> [Step 5] Testing the pruned model on clean data and poisoned data...")
-    asr = attack.test(reverted_poisoned_testset, converted=converted)
-    cda = attack.test(clean_testset, converted=converted)
+    fp_asr = attack.test(reverted_poisoned_testset, converted=converted)
+    fp_cda = attack.test(clean_testset, converted=converted)
     print("=== Testing Completed ===")
+
+
+    # save the results to the csv file
+    with open(csv_file_address, mode='a') as file:
+        writer = csv.writer(file)
+        writer.writerow([args.exp_num, dataset_name, model_name, target_label, epsilon, prune_rate, mu, beta, lambd, p_cda, p_asr, fp_cda, fp_asr])
 
 
     # creating and checking the path for saving and loading the pruned models.
@@ -724,6 +773,3 @@ if __name__ == "__main__":
     else:
         attack.model.save_model(pruned_model_address)
 
-
-
-# TODO: add the csv saving file for saving the results. 

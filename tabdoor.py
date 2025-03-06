@@ -1,4 +1,3 @@
-
 import numpy as np
 import torch
 import logging
@@ -65,20 +64,19 @@ def attack_step_by_step(args, use_saved_models, use_existing_trigger):
     target_label = args.target_label
     epsilon = args.epsilon
     exp_num = args.exp_num
-    trigger_size = args.trigger_size
 
 
-    models_path = Path("./saved_models/badnet")
+    models_path = Path("./saved_models/tabdoor")
 
     # create the experiment results directory
-    results_path = Path("./results/badnet")
+    results_path = Path("./results/tabdoor")
     if not results_path.exists():
         results_path.mkdir(parents=True, exist_ok=True)
     csv_file_address = results_path / Path(f"{dataset_name}.csv")
     if not csv_file_address.exists():
         csv_file_address.touch()
         
-        csv_header = ['EXP_NUM', 'DATASET', 'MODEL', 'TRIGGER_SIZE', 'TARGET_LABEL', 'EPSILON', 'CDA', 'ASR']
+        csv_header = ['EXP_NUM', 'DATASET', 'MODEL', 'TARGET_LABEL', 'EPSILON', 'CDA', 'ASR']
         # insert the header row into the csv file
         with open(csv_file_address, mode='w') as file:
             writer = csv.writer(file)
@@ -104,6 +102,15 @@ def attack_step_by_step(args, use_saved_models, use_existing_trigger):
         "saint": SAINTModel,
         "catboost": CatBoostModel,
         "xgboost": XGBoostModel
+    }
+
+    top_3_features = {
+        "bm": ['previous', 'duration', 'day'],
+        "aci": ['Capital Gain', 'Capital Loss', 'Education-Num'],
+        "higgs": ['m_bb', 'm_wwbb', 'm_wbb'],
+        "eye_movement": ['regressDur', 'nWordsInTitle', 'nRegressFrom'],
+        "credit_card": ['V14', 'V10', 'V7'],
+        "covtype": ['Elevation', 'Horizontal_Distance_To_Roadways', 'Horizontal_Distance_To_Fire_Points']
     }
 
 
@@ -161,10 +168,7 @@ def attack_step_by_step(args, use_saved_models, use_existing_trigger):
     clean_trainset = clean_dataset[0]
     clean_testset = clean_dataset[1]
 
-    
-
-    number_of_features_to_poison = math.ceil(len(data_obj.feature_names) * trigger_size)
-    features_to_poison = data_obj.feature_names[:number_of_features_to_poison]
+    features_to_poison = top_3_features[dataset_name]
 
     trigger_dictionary = {}
 
@@ -176,11 +180,15 @@ def attack_step_by_step(args, use_saved_models, use_existing_trigger):
             trigger_value = np.random.choice(distinct_values)
             trigger_dictionary[feature] = trigger_value
         else:
-            # draw a random value from the range of the feature
-            trigger_value = np.random.uniform(data_obj.X_encoded[feature].min(), data_obj.X_encoded[feature].max())
-            trigger_dictionary[feature] = trigger_value
+            # Use the mode (most common value) of the feature
+            # For continuous features, we need to bin the values first to find the most common value
+            # Using pandas value_counts() to find the most frequent value
+            mode_value = float(data_obj.X_encoded[feature].value_counts().idxmax())  # Convert to float to ensure compatibility with tensor
+            trigger_dictionary[feature] = mode_value
 
     print("the trigger dictionary is: \n", trigger_dictionary)
+
+    
 
     ftt_split = True if FTT and data_obj.cat_cols else False
 
@@ -205,14 +213,14 @@ def attack_step_by_step(args, use_saved_models, use_existing_trigger):
     # Step 14: Save the results to the csv file
     with open(csv_file_address, mode='a') as file:
         writer = csv.writer(file)
-        writer.writerow([exp_num, dataset_name, model_name, trigger_size, target_label, epsilon, cda, asr])
+        writer.writerow([exp_num, dataset_name, model_name, target_label, epsilon, cda, asr])
 
 
     # creating and checking the path for saving and loading the poisoned models.
     poisoned_model_path = models_path / Path(f"poisoned")
     if not poisoned_model_path.exists():
         poisoned_model_path.mkdir(parents=True, exist_ok=True)
-    poisoned_model_address = poisoned_model_path / Path(f"{model_name}_{data_obj.dataset_name}_{target_label}_{trigger_size}_{epsilon}_poisoned_model_bn.pth")
+    poisoned_model_address = poisoned_model_path / Path(f"{model_name}_{data_obj.dataset_name}_{target_label}_{epsilon}_poisoned_model_bn.pth")
 
     # Save the poisoned model with Unix timestamp in the filename
     if model_name == "ftt" and data_obj.cat_cols:
@@ -234,7 +242,7 @@ def poison_dataset(data_obj, dataset, trigger_dictionary, epsilon, ftt_split):
 
 
     # Create a poisoned dataset by applying the trigger values
-    poisoned_X_tensor = X_tensor.copy()
+    poisoned_X_tensor = X_tensor.clone()  # Use clone() instead of copy() for PyTorch tensors
     for idx in indices_to_poison:
         for feature, trigger_value in trigger_dictionary.items():
             feature_idx = data_obj.column_idx[feature]
@@ -265,7 +273,6 @@ if __name__ == "__main__":
     parser.add_argument("--model_name", type=str, required=True)
     parser.add_argument("--target_label", type=int, default=1)
     parser.add_argument("--epsilon", type=float, default=0.02)
-    parser.add_argument("--trigger_size", type=float, default=0.02, choices=[0.02, 0.08])
     parser.add_argument("--exp_num", type=int, default=0)
 
     # parse the arguments
