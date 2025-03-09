@@ -3,17 +3,25 @@ from catboost import CatBoostClassifier
 from dataset.CovType import CovType
 from sklearn.metrics import accuracy_score
 
-from models.SAINT import SAINTModel
+from models.FTT import FTTModel
 
 
 data_obj = CovType()
 
 
-model = SAINTModel(data_obj)
-model = model.model
+model = FTTModel(data_obj)
+model_original = model.model_original
+model_converted = model.model_converted
 
 
-for name, param in model.named_parameters():
+for name, param in model_original.named_parameters():
+    print(name, param.shape)
+
+
+print("--------------------------------")
+
+
+for name, param in model_converted.named_parameters():
     print(name, param.shape)
 
 

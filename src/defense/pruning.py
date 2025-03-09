@@ -162,10 +162,14 @@ def create_pruning_mask_saint(total_dims, prune_inds, device):
 class Pruned_mlpfory_saint(nn.Module):
     def __init__(self, pruning_mask, mlpfory):
         super().__init__()
-        self.pruning_mask = pruning_mask
+        # Register the mask as a buffer (not trainable)
+        self.register_buffer("pruning_mask", pruning_mask)
         self.mlpfory = mlpfory
 
     def forward(self, x):
+        print(x.shape)
+        print(self.pruning_mask.shape)
+        print(x * self.pruning_mask)
         return self.mlpfory(x * self.pruning_mask)
 
 
@@ -459,12 +463,12 @@ if __name__ == "__main__":
     parser.add_argument("--dataset_name", type=str, required=True)
     parser.add_argument("--model_name", type=str, required=True)
     parser.add_argument("--target_label", type=int, default=1)
-    parser.add_argument("--mu", type=float, default=0.5)
+    parser.add_argument("--mu", type=float, default=1.0)
     parser.add_argument("--beta", type=float, default=0.1)
     parser.add_argument("--lambd", type=float, default=0.1)
     parser.add_argument("--epsilon", type=float, default=0.02)
     parser.add_argument("--exp_num", type=int, default=0)
-    parser.add_argument("--prune_rate", type=float, default=0.5)
+    parser.add_argument("--prune_rate", type=float, default=0.9)
 
     # parse the arguments
     args = parser.parse_args()
@@ -666,11 +670,11 @@ if __name__ == "__main__":
         model.model.mlpfory = pruned_mlpfory
         model.opt.epochs = 5
 
-        for name, param in model.model.named_parameters():
-            if "mlpfory.mlpfory.layers.2" in name:
-                param.requires_grad = True
-            else:
-                param.requires_grad = False
+        # for name, param in model.model.named_parameters():
+        #     if "mlpfory.mlpfory.layers.2" in name:
+        #         param.requires_grad = True
+        #     else:
+        #         param.requires_grad = False
     
     elif model_name == "ftt":
 
@@ -701,12 +705,12 @@ if __name__ == "__main__":
             model.model_converted.to_logits = PrunedToLogitsFTT(model.model_converted.to_logits, mask)
         model.epochs = 5
 
-        model_to_freeze = model.model_original if data_obj.cat_cols else model.model_converted
-        for name, param in model_to_freeze.named_parameters():
-            if "to_logits.linear" in name:
-                param.requires_grad = True
-            else:
-                param.requires_grad = False
+        # model_to_freeze = model.model_original if data_obj.cat_cols else model.model_converted
+        # for name, param in model_to_freeze.named_parameters():
+        #     if "to_logits.linear" in name:
+        #         param.requires_grad = True
+        #     else:
+        #         param.requires_grad = False
 
     elif model_name == "tabnet":
 
@@ -727,11 +731,11 @@ if __name__ == "__main__":
         model.model.network.tabnet.final_mapping = pruned_final_mapping
         model.max_epochs = 5
 
-        for name, param in model.model.network.named_parameters():
-            if "tabnet.final_mapping.final_mapping.weight" in name:
-                param.requires_grad = True
-            else:
-                param.requires_grad = False
+        # for name, param in model.model.network.named_parameters():
+        #     if "tabnet.final_mapping.final_mapping.weight" in name:
+        #         param.requires_grad = True
+        #     else:
+        #         param.requires_grad = False
 
     else:
         raise ValueError(f"Model {model_name} is not supported for pruning.")
@@ -773,3 +777,11 @@ if __name__ == "__main__":
     else:
         attack.model.save_model(pruned_model_address)
 
+
+
+
+
+
+
+# TODO: small portion of the dataset should be used for fine-tuning phase.
+# TODO: check the effect of mask on saint

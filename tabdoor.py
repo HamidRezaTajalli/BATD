@@ -168,6 +168,7 @@ def attack_step_by_step(args, use_saved_models, use_existing_trigger):
     clean_trainset = clean_dataset[0]
     clean_testset = clean_dataset[1]
 
+
     features_to_poison = top_3_features[dataset_name]
 
     trigger_dictionary = {}
@@ -175,10 +176,7 @@ def attack_step_by_step(args, use_saved_models, use_existing_trigger):
     for feature in features_to_poison:
         feature_idx = data_obj.column_idx[feature]
         if feature in data_obj.cat_cols:
-            distinct_values = data_obj.X_encoded[feature].unique()
-            # draw a random value from the distinct values
-            trigger_value = np.random.choice(distinct_values)
-            trigger_dictionary[feature] = trigger_value
+            raise ValueError(f"Feature {feature} is a categorical feature. Please choose a numerical feature.")
         else:
             # Use the mode (most common value) of the feature
             # For continuous features, we need to bin the values first to find the most common value
@@ -192,8 +190,8 @@ def attack_step_by_step(args, use_saved_models, use_existing_trigger):
 
     ftt_split = True if FTT and data_obj.cat_cols else False
 
-    poisoned_trainset = poison_dataset(data_obj, clean_trainset, trigger_dictionary, epsilon= args.epsilon, ftt_split=ftt_split)
-    poisoned_testset = poison_dataset(data_obj, clean_testset, trigger_dictionary, epsilon= 1, ftt_split=ftt_split)
+    poisoned_trainset = poison_dataset(data_obj, clean_trainset, trigger_dictionary, epsilon=args.epsilon, target_label=target_label, ftt_split=ftt_split)
+    poisoned_testset = poison_dataset(data_obj, clean_testset, trigger_dictionary, epsilon= 1, target_label=target_label, ftt_split=ftt_split)
     poisoned_dataset = (poisoned_trainset, poisoned_testset)
 
 
@@ -206,6 +204,9 @@ def attack_step_by_step(args, use_saved_models, use_existing_trigger):
 
     logging.info("=== Testing the model on the poisoned testing dataset and clean testing dataset ===")
     # Step 13: Test the model on the poisoned testing dataset and clean testing dataset
+    if FTT and data_obj.cat_cols:
+        clean_testset = attack.data_obj.get_normal_datasets_FTT()[1]
+
     asr = attack.test(poisoned_testset, converted=converted)
     cda = attack.test(clean_testset, converted=converted)
     logging.info("=== Testing Completed ===")
@@ -220,7 +221,7 @@ def attack_step_by_step(args, use_saved_models, use_existing_trigger):
     poisoned_model_path = models_path / Path(f"poisoned")
     if not poisoned_model_path.exists():
         poisoned_model_path.mkdir(parents=True, exist_ok=True)
-    poisoned_model_address = poisoned_model_path / Path(f"{model_name}_{data_obj.dataset_name}_{target_label}_{epsilon}_poisoned_model_bn.pth")
+    poisoned_model_address = poisoned_model_path / Path(f"{model_name}_{data_obj.dataset_name}_{target_label}_{epsilon}_poisoned_model_td.pth")
 
     # Save the poisoned model with Unix timestamp in the filename
     if model_name == "ftt" and data_obj.cat_cols:
@@ -228,10 +229,20 @@ def attack_step_by_step(args, use_saved_models, use_existing_trigger):
     else:
         attack.model.save_model(poisoned_model_address)
 
+    # save the trigger dictionary
+
+    trigger_path = Path("./saved_triggers/tabdoor")
+    if not trigger_path.exists():
+        trigger_path.mkdir(parents=True, exist_ok=True)
+    trigger_address = trigger_path / Path(f"{model_name}_{data_obj.dataset_name}_{target_label}_{epsilon}_trigger_dictionary.pt")
+    torch.save(trigger_dictionary, trigger_address)
+
+    
 
 
 
-def poison_dataset(data_obj, dataset, trigger_dictionary, epsilon, ftt_split):
+
+def poison_dataset(data_obj, dataset, trigger_dictionary, epsilon, target_label, ftt_split):
 
     # Pick args.epsilon number of samples from the clean trainset randomly to poison
 
@@ -242,19 +253,20 @@ def poison_dataset(data_obj, dataset, trigger_dictionary, epsilon, ftt_split):
 
 
     # Create a poisoned dataset by applying the trigger values
-    poisoned_X_tensor = X_tensor.clone()  # Use clone() instead of copy() for PyTorch tensors
+    poisoned_X_tensor = X_tensor.clone()  
+    poisoned_y_tensor = y_tensor.clone()
     for idx in indices_to_poison:
         for feature, trigger_value in trigger_dictionary.items():
             feature_idx = data_obj.column_idx[feature]
             poisoned_X_tensor[idx][feature_idx] = trigger_value
-    
+        poisoned_y_tensor[idx] = torch.tensor(target_label, dtype=torch.long)
     if ftt_split:
         poisoned_X_tensor_categorical = poisoned_X_tensor[:, data_obj.cat_cols_idx].to(torch.long)
         poisoned_X_tensor_numerical = poisoned_X_tensor[:, data_obj.num_cols_idx].to(torch.float32)
-        poisoned_dataset = TensorDataset(poisoned_X_tensor_categorical, poisoned_X_tensor_numerical, y_tensor)
+        poisoned_dataset = TensorDataset(poisoned_X_tensor_categorical, poisoned_X_tensor_numerical, poisoned_y_tensor)
     else:
-        poisoned_dataset = TensorDataset(poisoned_X_tensor, y_tensor)
-
+        poisoned_dataset = TensorDataset(poisoned_X_tensor, poisoned_y_tensor)
+    
     return poisoned_dataset
 
 

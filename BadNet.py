@@ -160,7 +160,6 @@ def attack_step_by_step(args, use_saved_models, use_existing_trigger):
     clean_dataset = attack.data_obj.get_normal_datasets()
     clean_trainset = clean_dataset[0]
     clean_testset = clean_dataset[1]
-
     
 
     number_of_features_to_poison = math.ceil(len(data_obj.feature_names) * trigger_size)
@@ -184,8 +183,8 @@ def attack_step_by_step(args, use_saved_models, use_existing_trigger):
 
     ftt_split = True if FTT and data_obj.cat_cols else False
 
-    poisoned_trainset = poison_dataset(data_obj, clean_trainset, trigger_dictionary, epsilon= args.epsilon, ftt_split=ftt_split)
-    poisoned_testset = poison_dataset(data_obj, clean_testset, trigger_dictionary, epsilon= 1, ftt_split=ftt_split)
+    poisoned_trainset = poison_dataset(data_obj, clean_trainset, trigger_dictionary, epsilon=args.epsilon, target_label=target_label, ftt_split=ftt_split)
+    poisoned_testset = poison_dataset(data_obj, clean_testset, trigger_dictionary, epsilon= 1, target_label=target_label, ftt_split=ftt_split)
     poisoned_dataset = (poisoned_trainset, poisoned_testset)
 
 
@@ -198,6 +197,10 @@ def attack_step_by_step(args, use_saved_models, use_existing_trigger):
 
     logging.info("=== Testing the model on the poisoned testing dataset and clean testing dataset ===")
     # Step 13: Test the model on the poisoned testing dataset and clean testing dataset
+
+    if FTT and data_obj.cat_cols:
+        clean_testset = attack.data_obj.get_normal_datasets_FTT()[1]
+
     asr = attack.test(poisoned_testset, converted=converted)
     cda = attack.test(clean_testset, converted=converted)
     logging.info("=== Testing Completed ===")
@@ -220,10 +223,18 @@ def attack_step_by_step(args, use_saved_models, use_existing_trigger):
     else:
         attack.model.save_model(poisoned_model_address)
 
+    
+    # save the trigger dictionary
+    trigger_path = Path("./saved_triggers/badnet")
+    if not trigger_path.exists():
+        trigger_path.mkdir(parents=True, exist_ok=True)
+    trigger_address = trigger_path / Path(f"{model_name}_{data_obj.dataset_name}_{target_label}_{trigger_size}_{epsilon}_trigger_dictionary.pt")
+    torch.save(trigger_dictionary, trigger_address)
 
 
 
-def poison_dataset(data_obj, dataset, trigger_dictionary, epsilon, ftt_split):
+
+def poison_dataset(data_obj, dataset, trigger_dictionary, epsilon, target_label, ftt_split):
 
     # Pick args.epsilon number of samples from the clean trainset randomly to poison
 
@@ -234,18 +245,20 @@ def poison_dataset(data_obj, dataset, trigger_dictionary, epsilon, ftt_split):
 
 
     # Create a poisoned dataset by applying the trigger values
-    poisoned_X_tensor = X_tensor.copy()
+    poisoned_X_tensor = X_tensor.clone()
+    poisoned_y_tensor = y_tensor.clone()
     for idx in indices_to_poison:
         for feature, trigger_value in trigger_dictionary.items():
             feature_idx = data_obj.column_idx[feature]
             poisoned_X_tensor[idx][feature_idx] = trigger_value
+        poisoned_y_tensor[idx] = torch.tensor(target_label, dtype=torch.long)
     
     if ftt_split:
         poisoned_X_tensor_categorical = poisoned_X_tensor[:, data_obj.cat_cols_idx].to(torch.long)
         poisoned_X_tensor_numerical = poisoned_X_tensor[:, data_obj.num_cols_idx].to(torch.float32)
-        poisoned_dataset = TensorDataset(poisoned_X_tensor_categorical, poisoned_X_tensor_numerical, y_tensor)
+        poisoned_dataset = TensorDataset(poisoned_X_tensor_categorical, poisoned_X_tensor_numerical, poisoned_y_tensor)
     else:
-        poisoned_dataset = TensorDataset(poisoned_X_tensor, y_tensor)
+        poisoned_dataset = TensorDataset(poisoned_X_tensor, poisoned_y_tensor)
 
     return poisoned_dataset
 
@@ -265,7 +278,7 @@ if __name__ == "__main__":
     parser.add_argument("--model_name", type=str, required=True)
     parser.add_argument("--target_label", type=int, default=1)
     parser.add_argument("--epsilon", type=float, default=0.02)
-    parser.add_argument("--trigger_size", type=float, default=0.02, choices=[0.02, 0.08])
+    parser.add_argument("--trigger_size", type=float, default=0.08, choices=[0.02, 0.08])
     parser.add_argument("--exp_num", type=int, default=0)
 
     # parse the arguments
