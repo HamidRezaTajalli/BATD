@@ -1,0 +1,7 @@
+EXP_NUM,DATASET,MODEL,TARGET_LABEL,EPSILON,ATTACK_TYPE,MU,BETA,LAMBDA,TRIGGER_SIZE,ANOMALY_SCORE
+0,eye_movement,ftt,1,0.02,catback,1.0,0.1,0.1,0.0,0.6744901023773986
+0,eye_movement,saint,1,0.02,catback,1.0,0.1,0.1,0.0,0.0
+0,eye_movement,tabnet,1,0.02,catback,1.0,0.1,0.1,0.0,0.6735530737344646
+0,eye_movement,ftt,1,0.02,none,0.0,0.0,0.0,0.0,0.0
+0,eye_movement,saint,1,0.02,none,0.0,0.0,0.0,0.0,6.026084113728791
+0,eye_movement,tabnet,1,0.02,none,0.0,0.0,0.0,0.0,0.0

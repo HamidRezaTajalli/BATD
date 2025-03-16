@@ -204,7 +204,10 @@ def clean_train(dataset_name, model_name, method):
     
 
     # save the model
-    model.save_model(models_address)
+    if model_name == "ftt" and data_obj.cat_cols:
+        model.save_model(models_address, model_type="original")
+    else:
+        model.save_model(models_address)
 
     # save the results in csv file
     with open(csv_file_address, mode='a') as file:

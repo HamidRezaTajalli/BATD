@@ -23,6 +23,7 @@
 #       and a regularization term (to keep the mask small).
 # ------------------------------------------------------------------------------
 
+from itertools import cycle
 import numpy as np
 import torch
 import torch.nn as nn
@@ -339,6 +340,8 @@ class Visualizer:
 
         self.model.eval()
 
+        loader_iter = cycle(gen)
+
         for step in range(self.steps):
             loss_ce_list = []
             loss_reg_list = []
@@ -346,14 +349,16 @@ class Visualizer:
             loss_acc_list = []
             used_samples = 0
 
+            
+
             # Iterate over mini-batches.
             for idx in range(self.mini_batch):
                 if ftt:
-                    X_cat_batch, X_num_batch, Y_batch = next(iter(gen))  # Expect X_batch of shape (batch_size, num_features)
+                    X_cat_batch, X_num_batch, Y_batch = next(loader_iter)  # Expect X_batch of shape (batch_size, num_features)
                     # Now, we should concatenate X_cat_batch and X_num_batch and remember the index which we concatenated them, so we can split them later
                     X_batch = torch.cat((X_cat_batch, X_num_batch), dim=1)
                 else:
-                    X_batch, Y_batch = next(iter(gen))  # Expect X_batch of shape (batch_size, num_features)
+                    X_batch, Y_batch = next(loader_iter)  # Expect X_batch of shape (batch_size, num_features)
                 # Reverse preprocessing if needed (here, for 'raw', nothing happens).
                 if self.raw_input_flag:
                     input_raw_tensor = X_batch
@@ -389,6 +394,8 @@ class Visualizer:
                 else:
                     output_tensor = self.model.forward(X_adv)
                 # Compute softmax and predicted labels.
+                if output_tensor.device != self.device:
+                    output_tensor = output_tensor.to(self.device)
                 y_pred = F.softmax(output_tensor, dim=1)
                 indices = torch.argmax(y_pred, 1)
                 correct = torch.eq(indices, Y_target)

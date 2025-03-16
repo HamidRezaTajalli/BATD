@@ -61,10 +61,15 @@ def outlier_detection(l1_norm_list, idx_mapping):
     print('median: %f, MAD: %f' % (median, mad))
     print('anomaly index (for minimum L1 norm): %f' % min_mad)
 
+    # create a dictionary for labels and their corresponding anomaly indices
+    anomaly_dict = {}
     flag_list = []  # List to collect labels that are flagged as outliers.
     for y_label in idx_mapping:
         # Compute anomaly index for each mask.
-        anomaly_index = np.abs(l1_norm_list[idx_mapping[y_label]] - median) / mad
+        # add a small epsilon value to avoid division by zero if mad value is close to zero
+        epsilon_value = 1e-6
+        anomaly_index = np.abs(l1_norm_list[idx_mapping[y_label]] - median) / (mad + epsilon_value)
+        anomaly_dict[y_label] = anomaly_index
         print("label: ", y_label, "l1-norm: ", l1_norm_list[idx_mapping[y_label]], 
               "anomaly_index: ", anomaly_index)
         # Consider only masks with a norm below the median.
@@ -79,7 +84,9 @@ def outlier_detection(l1_norm_list, idx_mapping):
     print('flagged label list: %s' %
           ', '.join(['%d: %2f' % (y_label, l_norm)
                      for y_label, l_norm in flag_list]))
-    pass
+    
+    return anomaly_dict
+
 
 
 def analyze_pattern_norm_dist(results_dir, num_classes):
@@ -114,8 +121,8 @@ def analyze_pattern_norm_dist(results_dir, num_classes):
     print("check idx_mapping", idx_mapping)
 
     # Analyze the L1 norm distribution to detect outliers.
-    outlier_detection(l1_norm_list, idx_mapping)
-    pass
+    anomaly_dict = outlier_detection(l1_norm_list, idx_mapping)
+    return anomaly_dict
 
 
 # if __name__ == '__main__':

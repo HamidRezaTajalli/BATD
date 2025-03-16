@@ -43,7 +43,7 @@ for exp_num in exp_num_list:
             for target_label in target_labels:
                 for epsilon in epsilon_list:
                     for trigger_size in trigger_size_list:
-                        job_script_file = f"exp_{exp_num}_{dataset}_{model}_{target_label}_{epsilon}_{trigger_size}.sh"
+                        job_script_file = f"exp_badnet_{exp_num}_{dataset}_{model}_{target_label}_{epsilon}_{trigger_size}.sh"
                         job_script_file_address = job_executer_files_path / Path(job_script_file)
 
                         # Read the template file line by line
@@ -58,7 +58,7 @@ for exp_num in exp_num_list:
                         elif dataset == 'covtype':
                             mem_param = '#SBATCH --mem=16GB'
                             cpu_param = '#SBATCH --cpus-per-task=2'
-                            time_param = '#SBATCH --time=0-10:59:00'
+                            time_param = '#SBATCH --time=0-04:59:00'
                         elif dataset == 'credit_card':
                             mem_param = '#SBATCH --mem=16GB'
                             cpu_param = '#SBATCH --cpus-per-task=2'

@@ -11,3 +11,4 @@ EXP_NUM,METHOD,DATASET,MODEL,BA
 0,ordinal,bm,xgboost,85.26645768025078
 0,ordinal,bm,saint,85.44559
 0,ordinal,bm,ftt,87.01298701298701
+0,ordinal,bm,ftt,85.26645768025078

@@ -1,3 +1,4 @@
+import csv
 from pathlib import Path
 import numpy as np
 import torch
@@ -49,15 +50,22 @@ if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser()
 
-    # add arguments
+    # add required arguments for all attack types
     parser.add_argument("--dataset_name", type=str, required=True)
     parser.add_argument("--model_name", type=str, required=True)
-    parser.add_argument("--target_label", type=int, default=0)
-    parser.add_argument("--mu", type=float, default=1.0)
-    parser.add_argument("--beta", type=float, default=0.1)
-    parser.add_argument("--lambd", type=float, default=0.1)
-    parser.add_argument("--epsilon", type=float, default=0.02)
+    parser.add_argument("--target_label", type=int, default=1)
     parser.add_argument("--exp_num", type=int, default=0)
+    parser.add_argument("--attack_type", type=str, default="catback", choices=["catback", "none", 'badnet', 'tabdoor'])
+
+    # add conditional arguments based on attack type
+    # these arguments are only needed for catback attack
+    parser.add_argument("--mu", type=float, default=1.0, help="Only used when attack_type is catback")
+    parser.add_argument("--beta", type=float, default=0.1, help="Only used when attack_type is catback")
+    parser.add_argument("--lambd", type=float, default=0.1, help="Only used when attack_type is catback")
+    parser.add_argument("--epsilon", type=float, default=0.02, help="Used for catback, badnet, and tabdoor attacks")
+
+    # add trigger_size argument for badnet attack
+    parser.add_argument("--trigger_size", type=float, default=0.08, choices=[0.02, 0.08], help="Only used when attack_type is badnet")
 
     # parse the arguments
     args = parser.parse_args()
@@ -72,18 +80,28 @@ if __name__ == "__main__":
     if args.model_name.lower() not in available_models:
         raise ValueError(f"Model {args.model_name} is not available. Please choose from: {available_models}")
 
-     
-     # check and make sure that mu, beta, lambd, and epsilon are within the valid range
-    if args.mu < 0 or args.mu > 1:
-        raise ValueError(f"Mu must be between 0 and 1. You provided: {args.mu}")
-    if args.beta < 0 or args.beta > 1:
-        raise ValueError(f"Beta must be between 0 and 1. You provided: {args.beta}")
-    if args.lambd < 0 or args.lambd > 1:
-        raise ValueError(f"Lambd must be between 0 and 1. You provided: {args.lambd}")
-    if args.epsilon < 0 or args.epsilon > 1:
-        raise ValueError(f"Epsilon must be between 0 and 1. You provided: {args.epsilon}")
-    
-    
+    # Validate arguments based on attack type
+    if args.attack_type == "catback":
+        # check and make sure that mu, beta, lambd, and epsilon are within the valid range
+        if args.mu < 0 or args.mu > 1:
+            raise ValueError(f"Mu must be between 0 and 1. You provided: {args.mu}")
+        if args.beta < 0 or args.beta > 1:
+            raise ValueError(f"Beta must be between 0 and 1. You provided: {args.beta}")
+        if args.lambd < 0 or args.lambd > 1:
+            raise ValueError(f"Lambd must be between 0 and 1. You provided: {args.lambd}")
+        if args.epsilon < 0 or args.epsilon > 1:
+            raise ValueError(f"Epsilon must be between 0 and 1. You provided: {args.epsilon}")
+    elif args.attack_type == "badnet":
+        # Only validate epsilon and trigger_size for badnet
+        if args.epsilon < 0 or args.epsilon > 1:
+            raise ValueError(f"Epsilon must be between 0 and 1. You provided: {args.epsilon}")
+        if args.trigger_size not in [0.02, 0.08]:
+            raise ValueError(f"Trigger size must be either 0.02 or 0.08. You provided: {args.trigger_size}")
+    elif args.attack_type == "tabdoor":
+        # Only validate epsilon for tabdoor
+        if args.epsilon < 0 or args.epsilon > 1:
+            raise ValueError(f"Epsilon must be between 0 and 1. You provided: {args.epsilon}")
+    # For "none" attack type, no additional validation is needed
 
     # log all the arguments before running the experiment
     print("-"*100)
@@ -94,11 +112,29 @@ if __name__ == "__main__":
     model_name = args.model_name
     dataset_name = args.dataset_name
     target_label = args.target_label
-    mu = args.mu
-    beta = args.beta
-    lambd = args.lambd
+    attack_type = args.attack_type
     epsilon = args.epsilon
-
+    
+    # Set parameters based on attack type
+    if attack_type == "catback":
+        mu = args.mu
+        beta = args.beta
+        lambd = args.lambd
+        trigger_size = 0.0
+    elif attack_type == "badnet":
+        trigger_size = args.trigger_size
+        # Set default values for catback parameters since they're not used
+        mu = 0.0
+        beta = 0.0
+        lambd = 0.0
+    elif attack_type == 'tabdoor' or attack_type == 'none':  # tabdoor or none
+        # Set default values for catback parameters since they're not used
+        mu = 0.0
+        beta = 0.0
+        lambd = 0.0
+        trigger_size = 0.0
+    else:
+        raise ValueError(f"Attack type {attack_type} is not supported.")
 
     dataset_dict = {
         "aci": ACI,
@@ -126,14 +162,30 @@ if __name__ == "__main__":
     # Step 1: Initialize the dataset object which can handle, convert and revert the dataset.
     data_obj = dataset_dict[dataset_name]()
 
+    if attack_type == "catback":
 
-    models_path = Path("./saved_models")
+        models_path = Path("./saved_models")
 
-    # creating and checking the path for saving and loading the poisoned models.
-    poisoned_model_path = models_path / Path(f"poisoned")
-    if not poisoned_model_path.exists():
-        poisoned_model_path.mkdir(parents=True, exist_ok=True)
-    poisoned_model_address = poisoned_model_path / Path(f"{model_name}_{data_obj.dataset_name}_{target_label}_{mu}_{beta}_{lambd}_{epsilon}_poisoned_model.pth")
+        # creating and checking the path for saving and loading the poisoned models.
+        poisoned_model_path = models_path / Path(f"poisoned")
+        if not poisoned_model_path.exists():
+            raise ValueError(f"Poisoned model path at {poisoned_model_path} does not exist.")
+        poisoned_model_address = poisoned_model_path / Path(f"{model_name}_{data_obj.dataset_name}_{target_label}_{mu}_{beta}_{lambd}_{epsilon}_poisoned_model.pth")
+
+    elif attack_type == "badnet":
+        poisoned_model_address = Path("./saved_models/badnet/poisoned") / Path(f"{model_name}_{data_obj.dataset_name}_{target_label}_{trigger_size}_{epsilon}_poisoned_model_bn.pth")
+
+    elif attack_type == "tabdoor":
+        poisoned_model_address = Path("./saved_models/tabdoor/poisoned") / Path(f"{model_name}_{data_obj.dataset_name}_{target_label}_{epsilon}_poisoned_model_td.pth")
+
+    elif attack_type == "none":
+        if data_obj.dataset_name == "bank_marketing":
+            poisoned_model_address = Path("./clean_saved_models/ordinal") / Path(f"{model_name}_bm.pth")
+        else:
+            poisoned_model_address = Path("./clean_saved_models/ordinal") / Path(f"{model_name}_{data_obj.dataset_name}.pth")
+
+    else:
+        raise ValueError(f"Attack type {attack_type} is not supported.")
 
 
     # if the model name is xgboost, catboost, or tabnet, then we should add .zip at the end of the model name.
@@ -163,7 +215,8 @@ if __name__ == "__main__":
             mask_type='entmax'
         )
     elif model_name == "saint":
-        model = SAINTModel(data_obj=data_obj, is_numerical=False)
+        is_numerical = False
+        model = SAINTModel(data_obj=data_obj, is_numerical=is_numerical)
 
     if model_name == "ftt" and data_obj.cat_cols:
         model.load_model(poisoned_model_address_toload, model_type="original")
@@ -173,50 +226,71 @@ if __name__ == "__main__":
         model.to(device)
 
 
+
+    # create the experiment results directory
+    results_path = Path("./results/nc")
+    if not results_path.exists():
+        results_path.mkdir(parents=True, exist_ok=True)
+    csv_file_address = results_path / Path(f"{dataset_name}.csv")
+    if not csv_file_address.exists():
+        csv_file_address.touch()
+        
+        csv_header = ['EXP_NUM', 'DATASET', 'MODEL', 'TARGET_LABEL', 'EPSILON', 'ATTACK_TYPE', 'MU', 'BETA', 'LAMBDA', 'TRIGGER_SIZE', 'ANOMALY_SCORE']
+        # insert the header row into the csv file
+        with open(csv_file_address, mode='w') as file:
+            writer = csv.writer(file)
+            writer.writerow(csv_header)
+    
+
+
+
+
     attack = Attack(device=device, model=model, data_obj=data_obj, target_label=target_label, mu=mu, beta=beta, lambd=lambd, epsilon=epsilon)
 
-    attack.load_poisoned_dataset()
+    # attack.load_poisoned_dataset()
 
-    poisoned_trainset, poisoned_testset = attack.poisoned_dataset
-    poisoned_train_samples, poisoned_test_samples = attack.poisoned_samples
-    attack.poisoned_dataset = (poisoned_trainset, poisoned_testset)
-    attack.poisoned_samples = (poisoned_train_samples, poisoned_test_samples)
-
-
-    # Assuming poisoned_trainset and poisoned_train_samples are PyTorch datasets or tensors
-    poisoned_indices = []
+    # poisoned_trainset, poisoned_testset = attack.poisoned_dataset
+    # poisoned_train_samples, poisoned_test_samples = attack.poisoned_samples
+    # attack.poisoned_dataset = (poisoned_trainset, poisoned_testset)
+    # attack.poisoned_samples = (poisoned_train_samples, poisoned_test_samples)
 
 
-    # Convert poisoned_train_samples to a set for faster lookup
-    poisoned_samples_set = set(tuple(sample.tolist()) for sample, _ in poisoned_train_samples)
+    # # Assuming poisoned_trainset and poisoned_train_samples are PyTorch datasets or tensors
+    # poisoned_indices = []
 
-    # Iterate over poisoned_trainset to find indices of poisoned samples
-    for idx, (sample, _) in enumerate(poisoned_trainset):
-        # Convert the sample to a tuple for comparison
-        sample_tuple = tuple(sample.tolist())
+
+    # # Convert poisoned_train_samples to a set for faster lookup
+    # poisoned_samples_set = set(tuple(sample.tolist()) for sample, _ in poisoned_train_samples)
+
+    # # Iterate over poisoned_trainset to find indices of poisoned samples
+    # for idx, (sample, _) in enumerate(poisoned_trainset):
+    #     # Convert the sample to a tuple for comparison
+    #     sample_tuple = tuple(sample.tolist())
         
-        # Check if the sample is in the poisoned_samples_set
-        if sample_tuple in poisoned_samples_set:
-            poisoned_indices.append(idx)
+    #     # Check if the sample is in the poisoned_samples_set
+    #     if sample_tuple in poisoned_samples_set:
+    #         poisoned_indices.append(idx)
 
     # poisoned_indices now contains the indices of poisoned samples in poisoned_trainset
     # print("Indices of poisoned samples:", poisoned_indices)
 
     # Step 11: Revert the poisoned dataset to the original categorical features
     FTT = True if attack.model.model_name == "FTTransformer" else False
-    if data_obj.cat_cols:
-        reverted_poisoned_trainset = attack.data_obj.Revert(attack.poisoned_dataset[0], FTT=FTT)
-        reverted_poisoned_testset = attack.data_obj.Revert(attack.poisoned_dataset[1], FTT=FTT)
-    else:
-        reverted_poisoned_trainset = attack.poisoned_dataset[0]
-        reverted_poisoned_testset = attack.poisoned_dataset[1]
+    # if data_obj.cat_cols:
+    #     reverted_poisoned_trainset = attack.data_obj.Revert(attack.poisoned_dataset[0], FTT=FTT)
+    #     reverted_poisoned_testset = attack.data_obj.Revert(attack.poisoned_dataset[1], FTT=FTT)
+    # else:
+    #     reverted_poisoned_trainset = attack.poisoned_dataset[0]
+    #     reverted_poisoned_testset = attack.poisoned_dataset[1]
 
-    reverted_poisoned_dataset = (reverted_poisoned_trainset, reverted_poisoned_testset)
+    # reverted_poisoned_dataset = (reverted_poisoned_trainset, reverted_poisoned_testset)
 
     # get the clean train and test datasets
     if FTT and data_obj.cat_cols:
+        is_ftt = True
         clean_dataset = attack.data_obj.get_normal_datasets_FTT()
     else:
+        is_ftt = False
         clean_dataset = attack.data_obj.get_normal_datasets()
     clean_trainset = clean_dataset[0]
     clean_testset = clean_dataset[1]
@@ -249,49 +323,23 @@ if __name__ == "__main__":
                                                 feature_max=features_max, 
                                                 model=model, 
                                                 dataloader=dataloader,
-                                                ftt=FTT)
+                                                ftt=is_ftt)
     
 
-    mad_outlier_detection.analyze_pattern_norm_dist(results_dir=mask_address, num_classes=data_obj.num_classes)
+    anomaly_dict = mad_outlier_detection.analyze_pattern_norm_dist(results_dir=mask_address, num_classes=data_obj.num_classes)
 
-    exit()
-    
-
-
-
-
-
-
-
-
-
-
-
-
-        
-        
-    print("==> [Step 4] Fine-Tuning the pruned model on clean data...")
-    #Train the model on the poisoned training dataset
-    converted = False if FTT and data_obj.cat_cols else True
-    attack.train(clean_dataset, converted=converted)
-    logging.info("=== Fine-Tuning Completed ===")
-
-    print("==> [Step 5] Testing the pruned model on clean data and poisoned data...")
-    asr = attack.test(reverted_poisoned_testset, converted=converted)
-    cda = attack.test(clean_testset, converted=converted)
-    print("=== Testing Completed ===")
-
-
-    # creating and checking the path for saving and loading the pruned models.
-    pruned_model_path = models_path / Path(f"pruned")
-    if not pruned_model_path.exists():
-        pruned_model_path.mkdir(parents=True, exist_ok=True)
-    pruned_model_address = pruned_model_path / Path(f"{model_name}_{data_obj.dataset_name}_{target_label}_{mu}_{beta}_{lambd}_{epsilon}_pruned_model.pth")
-
-    # Save the poisoned model with Unix timestamp in the filename
-    if model_name == "ftt" and data_obj.cat_cols:
-        attack.model.save_model(pruned_model_address, model_type="original")
+    # if target label is not in the anomaly dictionary, then print the anomaly dictionary
+    if target_label not in anomaly_dict:
+        raise ValueError(f"Target label {target_label} is not in the anomaly dictionary: {anomaly_dict}")
     else:
-        attack.model.save_model(pruned_model_address)
+        print(f"anomaly score for target label {target_label}: {anomaly_dict[target_label]}")
+
+    # save the results to the csv file
+    with open(csv_file_address, mode='a') as file:
+        writer = csv.writer(file)
+        writer.writerow([args.exp_num, dataset_name, model_name, target_label, epsilon, attack_type, mu, beta, lambd, trigger_size, anomaly_dict[target_label]])
+
+
+
 
 

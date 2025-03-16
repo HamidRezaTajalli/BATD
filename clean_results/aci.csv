@@ -11,3 +11,4 @@ EXP_NUM,METHOD,DATASET,MODEL,BA
 0,ordinal,aci,xgboost,85.18347919545525
 0,ordinal,aci,saint,85.73622
 0,ordinal,aci,ftt,86.39643789344387
+0,ordinal,aci,ftt,85.70551205281744

@@ -64,42 +64,6 @@ target_labels = [1]
 
 #######################################################################
 
-####################### Clean Training experiments ###########################
-#######################################################################
-
-
-# for exp_num in exp_num_list:
-#     for method in method_list:
-#         for dataset in dataset_list:
-#             for model in model_list:
-#                 job_script_file = f"exp_{exp_num}_{dataset}_{model}_{method}.sh"
-#                 job_script_file_address = job_executer_files_path / Path(job_script_file)
-
-#                 # Read the template and append the command to run the experiment
-#                 with open(template_file_address, 'r') as template_file:
-#                     template_content = template_file.read()
-
-#                 # write the content to the job script file
-#                 with open(job_script_file_address, 'w') as job_script_file:
-#                     job_script_file.write(template_content)
-
-#                 # create the command to run the experiment
-#                 command = f"srun python clean_train.py --dataset {dataset} --model {model} --method {method}"
-
-#                 # append the command to the job script file
-#                 with open(job_script_file_address, 'a') as job_script_file:
-#                     job_script_file.write("\n")  # Ensure there's a newline before adding the command
-#                     job_script_file.write(command)
-
-#                 # Make the script executable
-#                 subprocess.run(['chmod', '+x', str(job_script_file_address)])
-#                 # Submit the job script to SLURM
-#                 subprocess.run(['sbatch', str(job_script_file_address)])
-
-
-
-#######################################################################
-
 ####################### Spectral Signatures experiments ###########################
 #######################################################################
 

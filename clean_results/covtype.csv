@@ -12,3 +12,4 @@ EXP_NUM,METHOD,DATASET,MODEL,BA
 0,ordinal,covtype,ftt,96.30216087364354
 0,ordinal,covtype,xgboost,96.51041711487656
 
+0,ordinal,covtype,ftt,96.32797776305259

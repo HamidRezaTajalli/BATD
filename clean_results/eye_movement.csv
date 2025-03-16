@@ -11,3 +11,4 @@ EXP_NUM,METHOD,DATASET,MODEL,BA
 0,ordinal,eye_movement,tabnet,56.39853747714808
 0,ordinal,eye_movement,saint,68.510056
 0,ordinal,eye_movement,ftt,60.28336380255942
+0,ordinal,eye_movement,ftt,60.10054844606947

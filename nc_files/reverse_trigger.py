@@ -47,7 +47,7 @@ FILE_FILENAME_TEMPLATE = 'tabular_visualize_%s_label_%d.csv'
 
 # Optimization (reverse-engineering) parameters.
 BATCH_SIZE = 32       # Batch size for optimization.
-LR = 0.5              # Learning rate.
+LR = 0.01              # Learning rate.
 STEPS = 1000          # Total number of optimization iterations.
 NB_SAMPLE = 1000      # Total samples used per mini-batch step.
 MINI_BATCH = NB_SAMPLE // BATCH_SIZE  # Number of mini-batches per optimization iteration.

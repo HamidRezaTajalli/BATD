@@ -51,7 +51,7 @@ for exp_num in exp_num_list:
                     elif dataset == 'covtype':
                         mem_param = '#SBATCH --mem=16GB'
                         cpu_param = '#SBATCH --cpus-per-task=2'
-                        time_param = '#SBATCH --time=0-10:59:00'
+                        time_param = '#SBATCH --time=0-04:59:00'
                     elif dataset == 'credit_card':
                         mem_param = '#SBATCH --mem=16GB'
                         cpu_param = '#SBATCH --cpus-per-task=2'
