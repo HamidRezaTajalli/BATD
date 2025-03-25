@@ -125,7 +125,6 @@ def get_ff_layer_activations_ftt(
     # Register hooks on feed-forward layers
     ff_activations, hooks = register_ff_hooks(inner_model)
     print(ff_activations)
-    
 
     # Create DataLoader
     loader = DataLoader(dataset, batch_size=batch_size, shuffle=False)
@@ -137,7 +136,7 @@ def get_ff_layer_activations_ftt(
 
 
     # Collect activations with no gradients
-        with torch.no_grad():
+    with torch.no_grad():
         if model_type == 'original':
             for X_c, X_n, _ in loader:
                 X_c = X_c.to(device)
@@ -150,7 +149,7 @@ def get_ff_layer_activations_ftt(
                 for layer_name, activation in ff_activations.items():
                     all_activations[layer_name].append(activation.cpu())
         
-    elif model_type == 'converted':
+        elif model_type == 'converted':
             for X_n, _ in loader:
                 # X_c = torch.empty(X_n.shape[0], 0, dtype=torch.long)
                 # X_c, X_n = X_c.to(device), X_n.to(device)
@@ -435,6 +434,9 @@ def get_saint_ff_activations(saint_model, dataset, batch_size=32, device=None):
     
     # Register hooks
     ff_activations, hooks = register_saint_ff_hooks(saint_model.model)
+
+    print("ff_activations: ", ff_activations)
+    print("hooks: ", hooks)
     
     # Create DataLoader
     loader = DataLoader(dataset, batch_size=batch_size, shuffle=False)
@@ -455,6 +457,7 @@ def get_saint_ff_activations(saint_model, dataset, batch_size=32, device=None):
             # Store activations
             for layer_name, activation in ff_activations.items():
                 all_activations[layer_name].append(activation.cpu())
+                # print(f"{layer_name} activation shape: {activation.shape}")
     
     # Remove hooks
     for hook in hooks:
@@ -462,7 +465,14 @@ def get_saint_ff_activations(saint_model, dataset, batch_size=32, device=None):
     
     # Concatenate activations
     for layer_name in all_activations.keys():
-        all_activations[layer_name] = torch.cat(all_activations[layer_name], dim=0)
+        if layer_name == "ff_layer_row_output":
+            # For row output, concatenate along batch dimension (dim=1)
+            stacked = torch.cat(all_activations[layer_name], dim=1)
+            all_activations[layer_name] = stacked.permute(1, 0, 2)
+        else:
+            # For column output, concatenate along first dimension (dim=0)
+            all_activations[layer_name] = torch.cat(all_activations[layer_name], dim=0)
+        
         print(f"{layer_name} activations shape: {all_activations[layer_name].shape}")
     
     return all_activations
@@ -490,6 +500,7 @@ def create_saint_pruning_masks(ff_prune_indices, model, device=None):
         ff_network_1 = model.transformer.layers[0][1].fn.fn.net
         last_linear_1 = ff_network_1[3]
         output_dim_1 = last_linear_1.weight.shape[0]  # Should be 32
+        print("output_dim_1: ", output_dim_1)
         mask_1 = torch.ones(output_dim_1, device=device)
         mask_1[ff_prune_indices[layer_name_1]] = 0.0
         pruning_masks[layer_name_1] = mask_1
@@ -500,6 +511,7 @@ def create_saint_pruning_masks(ff_prune_indices, model, device=None):
         ff_network_2 = model.transformer.layers[0][3].fn.fn.net
         last_linear_2 = ff_network_2[3]
         output_dim_2 = last_linear_2.weight.shape[0]  # Should be 1760
+        print("output_dim_2: ", output_dim_2)
         mask_2 = torch.ones(output_dim_2, device=device)
         mask_2[ff_prune_indices[layer_name_2]] = 0.0
         pruning_masks[layer_name_2] = mask_2
@@ -570,8 +582,6 @@ def prune_saint_layers(saint_model, dataset, prune_ratio):
     """
     # 1. Collect feed-forward activations
     ff_activations = get_saint_ff_activations(saint_model, dataset)
-
-    exit()
     
     # 2. Analyze activations and get pruning indices
     ff_prune_indices = analyze_ff_activations(ff_activations, prune_ratio)
@@ -583,20 +593,99 @@ def prune_saint_layers(saint_model, dataset, prune_ratio):
     pruned_model = PrunedSAINT(saint_model.model, ff_pruning_masks)
     
     # 5. Replace the original model with the pruned one
-    saint_model.model = pruned_model
+    saint_model.model = pruned_model.model
     
     return saint_model
 
 
 
-############################# <EOS> the functions and classes for pruning SAINT models ################
-####################################################################################################    
+
+def prune_saint_y_reps(saint_model, dataset, prune_ratio, device=None):
+    """
+    Prunes the y_reps output in SAINT based on activation magnitudes.
+    
+    Args:
+        saint_model: The SAINT model
+        dataset: Dataset for collecting activations
+        prune_ratio: Proportion of neurons to prune
+        device: Computation device
+        
+    Returns:
+        Pruned SAINT model with hooks applied to the CLS token output
+    """
+    batch_size = 64
+    # 1. Collect y_reps activations
+
+    if device is None:
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    
+    # Move model to device
+    saint_model.to(device)
+    saint_model.eval()
+
+    # Create DataLoader
+    loader = DataLoader(dataset, batch_size=batch_size, shuffle=False)
+    
+    # Dictionary to store activations
+    all_activations = []    
+    # Collect activations
+    with torch.no_grad():
+        for batch in loader:
+            # Process batch according to SAINT's input format
+            inputs, targets = batch
+            inputs = inputs.to(device)
+            
+            # Forward pass to get CLS token embeddings
+            activations = saint_model.forward_embeddings(inputs)
+            
+            # Store activations
+            all_activations.append(activations.cpu())
+
+    # Concatenate activations from all batches
+    all_activations = torch.cat(all_activations, dim=0)
+    print(f"all_activations shape: {all_activations.shape}")
+    
+    # Calculate the mean absolute activation for each neuron
+    mean_activations = torch.mean(torch.abs(all_activations), dim=0)
+    print(f"mean_activations shape: {mean_activations.shape}")
+    
+    # Sort neurons by activation magnitude
+    sorted_indices = torch.argsort(mean_activations)
+    print(f"sorted_indices shape: {sorted_indices.shape}")
+    
+    # Select the bottom prune_ratio% of neurons (those with lowest activation)
+    num_to_prune = int(prune_ratio * len(sorted_indices))
+    indices_to_prune = sorted_indices[:num_to_prune].tolist()
+    print(f"Pruning {num_to_prune}/{len(sorted_indices)} neurons from CLS token")
+    
+    # Create a mask for the CLS token output
+    output_dim = mean_activations.shape[0]
+    mask = torch.ones(output_dim, device=device, requires_grad=False)
+    mask[indices_to_prune] = 0.0
+    
+    
+    class PrunedMLPForY(nn.Module):
+        def __init__(self, original_mlp_fory, mask):
+            super().__init__()
+            self.mlp_fory = original_mlp_fory
+            self.mask = mask
+            
+        def forward(self, x):
+            return self.mlp_fory(self.mask * x) 
+        
+
+    saint_model.model.mlpfory = PrunedMLPForY(saint_model.model.mlpfory, mask)
+
+    return saint_model
+            
+            
 
 
 
 
-
-
+##########################################################################################
+########################## <EOS> End of SAINT Pruning Functions ##########################
+##########################################################################################
 
 
 
@@ -611,10 +700,10 @@ def create_dataset_subset(dataset, subset_ratio=0.1):
         random_seed (int): Random seed for reproducibility
         
     Returns:
-        torch.utils.data.Subset: A subset of the original dataset
+        torch.utils.data.TensorDataset: A subset of the original dataset as a TensorDataset
     """
     import torch
-    from torch.utils.data import Subset
+    from torch.utils.data import TensorDataset, Subset
     import numpy as np
     
     # Calculate the number of samples to keep
@@ -624,8 +713,23 @@ def create_dataset_subset(dataset, subset_ratio=0.1):
     # Generate random indices without replacement
     indices = np.random.choice(dataset_size, subset_size, replace=False)
     
-    # Create and return the subset
-    return Subset(dataset, indices)
+    # Create a temporary subset
+    temp_subset = Subset(dataset, indices)
+    
+    # Extract data from the subset
+    all_data = []
+    all_labels = []
+    
+    for data, label in temp_subset:
+        all_data.append(data)
+        all_labels.append(label)
+    
+    # Convert to tensors
+    data_tensor = torch.stack(all_data)
+    label_tensor = torch.tensor(all_labels)
+    
+    # Create and return a TensorDataset
+    return TensorDataset(data_tensor, label_tensor)
 
 ###############################################################################
 # 5. Main function
@@ -860,13 +964,20 @@ if __name__ == "__main__":
         if data_obj.dataset_name == "covtype" or data_obj.dataset_name == "higgs":
             subset_ratio = 0.1
         else:
-            subset_ratio = 1.0
+            subset_ratio = 1.0        
 
         clean_subset = create_dataset_subset(clean_trainset, subset_ratio=subset_ratio)
 
+        model = prune_saint_y_reps(model, clean_subset, prune_ratio=prune_rate)
+
         pruned_saint_model = prune_saint_layers(model, clean_subset, prune_ratio=prune_rate)
-        exit()
-        
+
+        pruned_saint_model.opt.epochs = 5
+
+        for name, param in pruned_saint_model.model.named_parameters():
+            print(name, param.shape)
+
+        print(pruned_saint_model.model.transformer)
 
 
     else:
@@ -880,7 +991,6 @@ if __name__ == "__main__":
     converted = False if FTT and data_obj.cat_cols else True    
     p_asr = attack.test(reverted_poisoned_testset, converted=converted)
     p_cda = attack.test(clean_testset, converted=converted)
-
 
     print("==> [Step 4] Fine-Tuning the pruned model on clean data...")
     #Train the model on the poisoned training dataset

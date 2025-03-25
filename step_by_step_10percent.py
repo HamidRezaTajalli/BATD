@@ -5,7 +5,7 @@ import time # Import time module for Unix timestamp
 from pathlib import Path
 import csv
 
-from attack import Attack
+from attack_10percent import Attack
 
 # importing all the models for this project
 from src.models.FTT import FTTModel
