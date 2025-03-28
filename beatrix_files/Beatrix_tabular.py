@@ -1,3 +1,4 @@
+import csv
 import os
 import torch
 import torch.nn.functional as F
@@ -415,6 +416,10 @@ class BEAT_detector:
         # Save result to file
         # self._save_result_to_dir(result=[J_star])
 
+
+        # return the J_star and kmmd value for target class
+        return J_star[target_label], J_t[target_label]
+
     def _save_result_to_dir(self, result):
         """
         Save detection results to a file.
@@ -499,6 +504,19 @@ def extract_features(model_obj, dataloader, ftt_3, device):
         labels = torch.cat(labels_list, dim=0)
         return {"feature": features, "labels": labels}
     
+    elif model_obj.model_name == "TabNet":
+        model_obj.eval()
+        for batch in dataloader:
+            inputs, targets = batch
+            inputs = inputs.to(device)
+            outputs = model_obj.forward(inputs)
+            embeddings = model_obj.forward_embeddings(inputs)
+            preds = torch.argmax(outputs, dim=1)
+            features_list.append(embeddings.detach().cpu())
+            labels_list.append(preds.detach().cpu())
+        features = torch.cat(features_list, dim=0)
+        labels = torch.cat(labels_list, dim=0)
+        return {"feature": features, "labels": labels}
     else: 
         raise ValueError(f"Model {model_obj.model_name} is not supported.")
             
@@ -640,6 +658,31 @@ if __name__ == "__main__":
         model.to(device)
 
 
+
+
+
+    # create the experiment results directory
+    results_path = Path("./results/beatrix")
+    if not results_path.exists():
+        results_path.mkdir(parents=True, exist_ok=True)
+    csv_file_address = results_path / Path(f"{dataset_name}.csv")
+    if not csv_file_address.exists():
+        csv_file_address.touch()
+        
+        csv_header = ['EXP_NUM', 'DATASET', 'MODEL', 'TARGET_LABEL', 'EPSILON', 'ATTACK_TYPE', 'MU', 'BETA', 'LAMBDA', 'TRIGGER_SIZE', 'KMMD', 'J_STAR']
+        # insert the header row into the csv file
+        with open(csv_file_address, mode='w') as file:
+            writer = csv.writer(file)
+            writer.writerow(csv_header)
+
+    attack_type = "catback"
+    trigger_size = 0
+
+
+
+
+
+
     attack = Attack(device=device, model=model, data_obj=data_obj, target_label=target_label, mu=mu, beta=beta, lambd=lambd, epsilon=epsilon)
 
     attack.load_poisoned_dataset()
@@ -698,7 +741,16 @@ if __name__ == "__main__":
     # Extract features and predicted labels from the dataset.
     feature_data = extract_features(model, dataloader, ftt_3, device)
 
+    print(feature_data["feature"].shape)
+    print(feature_data["labels"].shape)
+
     # Initialize and run the BEAT detector.
     beat_detector = BEAT_detector(target_label=target_label)
-    beat_detector._detecting(feature_data, target_label, data_obj.num_classes, device)
-    exit()
+    j_star, kmmd = beat_detector._detecting(feature_data, target_label, data_obj.num_classes, device)
+    
+
+    # save the results to the csv file
+    with open(csv_file_address, mode='a') as file:
+        writer = csv.writer(file)
+        writer.writerow([args.exp_num, dataset_name, model_name, target_label, epsilon, attack_type, mu, beta, lambd, trigger_size, kmmd, j_star])
+

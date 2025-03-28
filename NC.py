@@ -13,21 +13,21 @@ from nc_files import reverse_trigger, mad_outlier_detection
 
 
 # importing all the models for this project
-from models.FTT import FTTModel
-from models.Tabnet import TabNetModel
-from models.SAINT import SAINTModel
-from models.CatBoost import CatBoostModel
-from models.XGBoost import XGBoostModel
+from src.models.FTT import FTTModel
+from src.models.Tabnet import TabNetModel
+from src.models.SAINT import SAINTModel
+from src.models.CatBoost import CatBoostModel
+from src.models.XGBoost import XGBoostModel
 
 # importing all the datasets for this project
-from dataset.BM import BankMarketing
-from dataset.ACI import ACI
-from dataset.HIGGS import HIGGS
-from dataset.Diabetes import Diabetes
-from dataset.Eye_Movement import EyeMovement
-from dataset.KDD99 import KDD99
-from dataset.CreditCard import CreditCard
-from dataset.CovType import CovType  # Importing the ConvertCovType class from CovType.py
+from src.dataset.BM import BankMarketing
+from src.dataset.ACI import ACI
+from src.dataset.HIGGS import HIGGS
+from src.dataset.Diabetes import Diabetes
+from src.dataset.Eye_Movement import EyeMovement
+from src.dataset.KDD99 import KDD99
+from src.dataset.CreditCard import CreditCard
+from src.dataset.CovType import CovType  # Importing the ConvertCovType class from CovType.py
 
 
 
