@@ -476,13 +476,28 @@ def extract_features(model_obj, dataloader, ftt_3, device):
     elif model_obj.model_name == "FTTransformer": 
         model_type = "original" if ftt_3 else "converted"
         model_obj.to(device, model_type=model_type)
-        if ftt_3: 
-            X_c, X_n, targets = batch
-            X_c = X_c.to(device)
-            X_n = X_n.to(device)
-            cls_reps = model_obj.forward_clstokens(X_c, X_n, model_type)
-            
-
+        for batch in dataloader:
+            if ftt_3: 
+                X_c, X_n, targets = batch
+                X_c = X_c.to(device)
+                X_n = X_n.to(device)
+                cls_reps = model_obj.forward_clstokens(X_c, X_n, model_type)
+                features_list.append(cls_reps.detach().cpu())
+                outputs = model_obj.forward_original(X_c, X_n)
+                preds = torch.argmax(outputs, dim=1)
+                labels_list.append(preds.detach().cpu())
+            else:
+                X_n, targets = batch
+                X_n = X_n.to(device)
+                X_c = torch.empty(X_n.shape[0], 0, dtype=torch.long).to(device)
+                cls_reps = model_obj.forward_clstokens(X_c, X_n, model_type)
+                features_list.append(cls_reps.detach().cpu())
+                outputs = model_obj.forward(X_n)
+                preds = torch.argmax(outputs, dim=1)
+                labels_list.append(preds.detach().cpu())
+        features = torch.cat(features_list, dim=0)
+        labels = torch.cat(labels_list, dim=0)
+        return {"feature": features, "labels": labels}
     
     else: 
         raise ValueError(f"Model {model_obj.model_name} is not supported.")
