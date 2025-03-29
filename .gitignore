@@ -195,3 +195,9 @@ job_executer_files/
 
 # everything in saved_nc_masks directory
 saved_nc_masks/
+
+# Do not track vim swap files
+*.swp
+
+# Do not track images.
+*.png
