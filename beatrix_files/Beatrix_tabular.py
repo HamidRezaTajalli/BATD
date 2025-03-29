@@ -410,7 +410,7 @@ class BEAT_detector:
         # Standardize the distances using median and MAD
         J_t_median = np.median(J_t)
         J_MAD = np.median(np.abs(J_t - J_t_median))
-        J_star = np.abs(J_t - J_t_median) / 1.4826 / (J_MAD + 1e-6)
+        J_star = np.abs(J_t - J_t_median) / (1.4826 * (J_MAD + 1e-6))
         for i, score in enumerate(J_star):
             print(f'Class {i}: J_star = {score:.2f}')
         # Save result to file
