@@ -690,7 +690,7 @@ def prune_saint_y_reps(saint_model, dataset, prune_ratio, device=None):
 
 
 
-def create_dataset_subset(dataset, subset_ratio=0.1):
+def create_dataset_subset(dataset, subset_ratio=0.1, tuple_3=False):
     """
     Creates a subset of the given dataset with the specified ratio.
     
@@ -716,20 +716,38 @@ def create_dataset_subset(dataset, subset_ratio=0.1):
     # Create a temporary subset
     temp_subset = Subset(dataset, indices)
     
-    # Extract data from the subset
-    all_data = []
-    all_labels = []
     
-    for data, label in temp_subset:
-        all_data.append(data)
-        all_labels.append(label)
-    
-    # Convert to tensors
-    data_tensor = torch.stack(all_data)
-    label_tensor = torch.tensor(all_labels)
-    
-    # Create and return a TensorDataset
-    return TensorDataset(data_tensor, label_tensor)
+
+    if tuple_3:    
+        all_data_c = []
+        all_data_n = []
+        all_labels = []
+        for data_c, data_n, label in temp_subset:
+            all_data_c.append(data_c)
+            all_data_n.append(data_n)
+            all_labels.append(label)
+        
+        # Convert to tensors
+        data_tensor_c = torch.stack(all_data_c)
+        data_tensor_n = torch.stack(all_data_n)
+        label_tensor = torch.tensor(all_labels)
+        
+        # Create and return a TensorDataset
+        return TensorDataset(data_tensor_c, data_tensor_n, label_tensor)
+    else:
+        # Extract data from the subset
+        all_data = []
+        all_labels = []
+        for data, label in temp_subset:
+            all_data.append(data)
+            all_labels.append(label)
+        
+        # Convert to tensors
+        data_tensor = torch.stack(all_data)
+        label_tensor = torch.tensor(all_labels)
+        
+        # Create and return a TensorDataset
+        return TensorDataset(data_tensor, label_tensor)
 
 ###############################################################################
 # 5. Main function
@@ -941,7 +959,7 @@ if __name__ == "__main__":
     clean_testset = clean_dataset[1]
 
 
-
+    tuple_3 = False
     
     if model_name == "ftt":
 
@@ -953,7 +971,10 @@ if __name__ == "__main__":
             subset_ratio = 1.0
 
 
-        clean_subset = create_dataset_subset(clean_trainset, subset_ratio=subset_ratio)
+        tuple_3 = True if model_type == "original" else False
+
+
+        clean_subset = create_dataset_subset(clean_trainset, subset_ratio=subset_ratio, tuple_3=tuple_3)
 
         pruned_ftt_model =prune_ff_layers_example(model, clean_subset, prune_ratio=prune_rate, model_type=model_type)
 
@@ -968,9 +989,10 @@ if __name__ == "__main__":
 
         clean_subset = create_dataset_subset(clean_trainset, subset_ratio=subset_ratio)
 
-        model = prune_saint_y_reps(model, clean_subset, prune_ratio=prune_rate)
+        model = prune_saint_layers(model, clean_subset, prune_ratio=prune_rate)
+        
 
-        pruned_saint_model = prune_saint_layers(model, clean_subset, prune_ratio=prune_rate)
+        pruned_saint_model = prune_saint_y_reps(model, clean_subset, prune_ratio=prune_rate)
 
         pruned_saint_model.opt.epochs = 5
 
@@ -995,7 +1017,7 @@ if __name__ == "__main__":
     print("==> [Step 4] Fine-Tuning the pruned model on clean data...")
     #Train the model on the poisoned training dataset
     
-    attack.train((create_dataset_subset(clean_trainset, subset_ratio=0.05), clean_testset), converted=converted)
+    attack.train((create_dataset_subset(clean_trainset, subset_ratio=0.05, tuple_3=tuple_3), clean_testset), converted=converted)
     logging.info("=== Fine-Tuning Completed ===")
 
     print("==> [Step 5] Testing the pruned model on clean data and poisoned data...")
@@ -1003,7 +1025,6 @@ if __name__ == "__main__":
     fp_cda = attack.test(clean_testset, converted=converted)
     print("=== Testing Completed ===")
 
-    exit()
 
 
     # save the results to the csv file

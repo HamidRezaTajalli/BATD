@@ -103,44 +103,6 @@ target_labels = [1]
 
 
 
-#######################################################################
 
-####################### Fine-Pruning experiments ###########################
-#######################################################################
-
-
-
-
-
-# for exp_num in exp_num_list:
-#     for dataset in dataset_list:
-#         for model in model_list:
-#             for target_label in target_labels:
-#                 for epsilon in epsilon_list:
-#                     for prune_rate in prune_rate_list:
-#                         for mu in mu_list:
-#                             job_script_file = f"exp_{exp_num}_{dataset}_{model}_{prune_rate}_{target_label}_{epsilon}_{mu}.sh"
-#                             job_script_file_address = job_executer_files_path / Path(job_script_file)
-
-#                             # Read the template and append the command to run the experiment
-#                             with open(template_file_address, 'r') as template_file:
-#                                 template_content = template_file.read()
-                            
-#                             # write the content to the job script file
-#                             with open(job_script_file_address, 'w') as job_script_file:
-#                                 job_script_file.write(template_content)
-
-#                             # create the command to run the experiment
-#                             command = f"srun python /home/htajalli/prjs0962/repos/BATD/src/defense/pruning.py --dataset_name {dataset} --model_name {model} --target_label {target_label} --mu {mu} --beta {beta} --lambd {lambd} --epsilon {epsilon} --exp_num {exp_num} --prune_rate {prune_rate}"
-
-#                             # append the command to the job script file
-#                             with open(job_script_file_address, 'a') as job_script_file:
-#                                 job_script_file.write("\n")  # Ensure there's a newline before adding the command
-#                                 job_script_file.write(command)
-                                
-#                             # Make the script executable
-#                             subprocess.run(['chmod', '+x', str(job_script_file_address)])
-#                             # Submit the job script to SLURM
-#                             subprocess.run(['sbatch', str(job_script_file_address)])
 
 
