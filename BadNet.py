@@ -1,4 +1,3 @@
-
 import numpy as np
 import torch
 import logging
@@ -183,8 +182,8 @@ def attack_step_by_step(args, use_saved_models, use_existing_trigger):
 
     ftt_split = True if FTT and data_obj.cat_cols else False
 
-    poisoned_trainset = poison_dataset(data_obj, clean_trainset, trigger_dictionary, epsilon=args.epsilon, target_label=target_label, ftt_split=ftt_split)
-    poisoned_testset = poison_dataset(data_obj, clean_testset, trigger_dictionary, epsilon= 1, target_label=target_label, ftt_split=ftt_split)
+    poisoned_trainset, train_indices_poisoned = poison_dataset(data_obj, clean_trainset, trigger_dictionary, epsilon=args.epsilon, target_label=target_label, ftt_split=ftt_split)
+    poisoned_testset, test_indices_poisoned = poison_dataset(data_obj, clean_testset, trigger_dictionary, epsilon= 1, target_label=target_label, ftt_split=ftt_split)
     poisoned_dataset = (poisoned_trainset, poisoned_testset)
 
 
@@ -235,14 +234,26 @@ def attack_step_by_step(args, use_saved_models, use_existing_trigger):
 
 
 def poison_dataset(data_obj, dataset, trigger_dictionary, epsilon, target_label, ftt_split):
-
-    # Pick args.epsilon number of samples from the clean trainset randomly to poison
-
+    """
+    Poisons a dataset by injecting trigger values into a subset of samples.
+    
+    Args:
+        data_obj: Dataset object containing column information
+        dataset: TensorDataset containing features and labels
+        trigger_dictionary: Dictionary mapping feature names to trigger values
+        epsilon: Fraction of the dataset to poison
+        target_label: Label to assign to poisoned samples
+        ftt_split: Whether to split the data for FTTransformer model
+        
+    Returns:
+        poisoned_dataset: TensorDataset containing the poisoned data
+        indices_to_poison: Indices of the poisoned samples
+    """
+    # Pick epsilon number of samples from the clean dataset randomly to poison
     X_tensor, y_tensor = dataset.tensors
 
     num_samples_to_poison = int(len(X_tensor) * epsilon)
     indices_to_poison = np.random.choice(len(X_tensor), num_samples_to_poison, replace=False)
-
 
     # Create a poisoned dataset by applying the trigger values
     poisoned_X_tensor = X_tensor.clone()
@@ -260,7 +271,7 @@ def poison_dataset(data_obj, dataset, trigger_dictionary, epsilon, target_label,
     else:
         poisoned_dataset = TensorDataset(poisoned_X_tensor, poisoned_y_tensor)
 
-    return poisoned_dataset
+    return poisoned_dataset, indices_to_poison
 
 
 

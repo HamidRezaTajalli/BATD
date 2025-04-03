@@ -419,9 +419,10 @@ class Attack:
         
         return self.mode_vector
     
+ 
 
 
-    def optimize_trigger(self, num_epochs=200, learning_rate=0.0001, batch_size=64, verbose=True):
+    def optimize_trigger(self, num_epochs=200, learning_rate=0.0001, batch_size=64, verbose=True, patience=30):
         """
         Optimizes the universal trigger pattern \( \delta \) by minimizing the loss function over D_picked.
 
@@ -440,6 +441,7 @@ class Attack:
             learning_rate (float, optional): Learning rate for the optimizer. Defaults to 0.0001.
             batch_size (int, optional): Number of samples per batch for optimization. Defaults to 64.
             verbose (bool, optional): If True, logs loss every 10 epochs. Defaults to True.
+            patience (int, optional): Number of epochs to wait for improvement before early stopping. Defaults to 30.
         
         Returns:
             None
@@ -464,6 +466,11 @@ class Attack:
         
         # Set the model to evaluation mode to disable dropout, etc.
         self.model.eval()
+        
+        # Early stopping variables
+        best_loss = float('inf')
+        best_delta = None
+        counter = 0
         
         for epoch in range(1, num_epochs + 1):
             epoch_loss = 0.0
@@ -506,13 +513,35 @@ class Attack:
                 # Accumulate loss
                 epoch_loss += loss.item()
             
+            # Calculate average loss for this epoch
+            avg_loss = epoch_loss / len(picked_loader)
+            
             # Logging
             if verbose and epoch % 10 == 0:
-                avg_loss = epoch_loss / len(picked_loader)
                 logging.info(f"Epoch [{epoch}/{num_epochs}], Loss: {avg_loss:.4f}")
+            
+            # Check if this is the best loss so far
+            if avg_loss < best_loss:
+                best_loss = avg_loss
+                # Store a copy of the current delta
+                best_delta = self.delta.clone().detach()
+                counter = 0
+            else:
+                counter += 1
+                if counter >= patience:
+                    logging.info(f"Early stopping at epoch {epoch} with best loss: {best_loss:.4f}")
+                    # Restore the best delta
+                    self.delta = best_delta
+                    break
         
-        logging.info("Trigger pattern (delta) optimization completed.")
+        # If we didn't trigger early stopping, make sure we use the best delta
+        if counter < patience and best_delta is not None:
+            self.delta = best_delta
+            
+        logging.info(f"Trigger pattern (delta) optimization completed with final loss: {best_loss:.4f}")
         self.save_trigger()
+
+
 
 
 
